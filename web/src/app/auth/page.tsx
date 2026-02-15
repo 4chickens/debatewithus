@@ -30,7 +30,8 @@ export default function AuthPage() {
 
         try {
             if (authState === 'verify') {
-                const res = await fetch(`http://localhost:4000/api/auth/verify`, {
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+                const res = await fetch(`${API_URL}/api/auth/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: verifyEmail, code: form.code }),
@@ -49,7 +50,8 @@ export default function AuthPage() {
                 ? { identifier: form.email || form.username, password: form.password }
                 : { username: form.username, email: form.email, password: form.password };
 
-            const res = await fetch(`http://localhost:4000${endpoint}`, {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+            const res = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
