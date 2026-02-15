@@ -1,0 +1,16 @@
+{
+  "name": "debatewithus",
+  "private": true,
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "scripts": {
+    "dev:all": "npm run dev --workspaces --if-present",
+    "dev:web": "npm run dev -w web",
+    "dev:server": "npm run dev -w server",
+    "build:all": "npm run build --workspaces --if-present",
+    "install:all": "npm install",
+    "sync-env": "copy .env web\\.env && copy .env server\\.env"
+  }
+}
