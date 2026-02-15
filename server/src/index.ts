@@ -14,7 +14,9 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic } from './services/supabase.js';
+import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus } from './services/supabase.js';
+import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
+import bcrypt from 'bcryptjs';
 
 const app = express();
 app.use(cors());
@@ -107,6 +109,86 @@ app.get('/token', async (req, res) => {
   } catch (err) {
     console.error('Token generation failed:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Auth Routes ---
+
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const existing = await findUserByIdentifier(email);
+    if (existing) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const user = await createUser(username, email, password);
+    const token = generateUserToken({ id: user.id, username: user.username, role: user.role });
+
+    res.status(201).json({ token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err: any) {
+    console.error('Signup failed:', err);
+    res.status(500).json({ error: err.message || 'Signup failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body; // identifier can be email or username
+    const user = await findUserByIdentifier(identifier);
+
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = generateUserToken({ id: user.id, username: user.username, role: user.role });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err: any) {
+    console.error('Login failed:', err);
+    res.status(500).json({ error: err.message || 'Login failed' });
+  }
+});
+
+// --- Topic Routes ---
+
+app.get('/api/topics', async (req, res) => {
+  try {
+    const { tag } = req.query;
+    const topics = await getActiveTopics(tag as string);
+    res.json(topics);
+  } catch (err: any) {
+    console.error('Fetch topics failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch topics' });
+  }
+});
+
+app.post('/api/topics', authenticateToken as any, async (req: AuthRequest, res) => {
+  try {
+    const { title, description, tags, thumbnail_url } = req.body;
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    const topic = await submitTopic(title, description, req.user!.id, tags, thumbnail_url);
+    res.status(201).json(topic);
+  } catch (err: any) {
+    console.error('Topic submission failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to submit topic' });
+  }
+});
+
+// --- Admin Routes ---
+
+app.post('/api/admin/topics/:id/approve', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const topic = await updateTopicStatus(id, 'active');
+    res.json({ message: 'Topic approved', topic });
+  } catch (err: any) {
+    console.error('Approval failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to approve topic' });
   }
 });
 

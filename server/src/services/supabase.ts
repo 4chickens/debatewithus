@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,4 +77,131 @@ export async function getRandomTopic() {
     } catch {
         return fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
+}
+
+/**
+ * --- AUTH SERVICES ---
+ */
+
+export async function createUser(username: string, email: string, passwordPlain: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    const passwordHash = await bcrypt.hash(passwordPlain, 10);
+
+    const { data, error } = await supabase
+        .from('users')
+        .insert([{ username, email, password_hash: passwordHash, role: 'user' }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function findUserByIdentifier(identifier: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    // Search by username OR email
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`username.eq.${identifier},email.eq.${identifier}`)
+        .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+    return data;
+}
+
+/**
+ * --- TOPIC & HASHTAG SERVICES ---
+ */
+
+export async function getActiveTopics(tag?: string) {
+    if (!supabase) return [];
+
+    let query = supabase
+        .from('topics')
+        .select(`
+            *,
+            created_by (username),
+            topic_tags (
+                tags (name)
+            )
+        `)
+        .eq('status', 'active');
+
+    if (tag) {
+        // This is a simplified filter for a junction table in Supabase
+        // In a real production app, we'd use a RPC or a more complex query
+        // For now, we'll fetch all and filter in JS if needed, or use a simpler tag approach
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+}
+
+export async function submitTopic(title: string, description: string, userId: string, tags: string[], thumbnailUrl?: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    // 1. Insert Topic
+    const { data: topic, error: topicError } = await supabase
+        .from('topics')
+        .insert([{
+            title,
+            description,
+            created_by: userId,
+            status: 'pending',
+            thumbnail_url: thumbnailUrl
+        }])
+        .select()
+        .single();
+
+    if (topicError) throw topicError;
+
+    // 2. Handle Tags
+    if (tags && tags.length > 0) {
+        for (const tagName of tags) {
+            const cleanTag = tagName.replace('#', '').toLowerCase();
+
+            // Find or create tag
+            let { data: tag, error: tagError } = await supabase
+                .from('tags')
+                .select('id')
+                .eq('name', cleanTag)
+                .single();
+
+            if (!tag) {
+                const { data: newTag, error: createTagError } = await supabase
+                    .from('tags')
+                    .insert([{ name: cleanTag }])
+                    .select()
+                    .single();
+                tag = newTag;
+            }
+
+            // Link to topic
+            if (tag) {
+                await supabase
+                    .from('topic_tags')
+                    .insert([{ topic_id: topic.id, tag_id: tag.id }]);
+            }
+        }
+    }
+
+    return topic;
+}
+
+export async function updateTopicStatus(topicId: string, status: 'active' | 'archived') {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { data, error } = await supabase
+        .from('topics')
+        .update({ status })
+        .eq('id', topicId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
 }
