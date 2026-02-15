@@ -20,13 +20,16 @@ import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } fro
 import bcrypt from 'bcryptjs';
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.NEXT_PUBLIC_APP_URL || '*',
+  credentials: true
+}));
 app.use(express.json());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: process.env.NEXT_PUBLIC_APP_URL || '*',
     methods: ['GET', 'POST'],
   },
 });

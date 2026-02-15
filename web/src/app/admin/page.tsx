@@ -33,7 +33,7 @@ export default function AdminPage() {
 
         const fetchPending = async () => {
             try {
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+                const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
                 // For now, reuse the topics API and filter manually if the backend doesn't have a separate endpoint
                 // Actually, I should have an admin endpoint. Let's assume there's one or fetch all and filter.
                 const res = await fetch(`${API_URL}/api/topics`);
@@ -52,7 +52,7 @@ export default function AdminPage() {
 
     const handleAction = async (id: string, action: 'approve' | 'reject') => {
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+            const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
             const res = await fetch(`${API_URL}/api/admin/topics/${id}/approve`, {
                 method: 'POST',
                 headers: {

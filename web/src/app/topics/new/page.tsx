@@ -29,7 +29,7 @@ export default function NewTopicPage() {
         const tagsArray = form.tags.split(',').map(t => t.trim()).filter(t => t !== '');
 
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+            const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
             const res = await fetch(`${API_URL}/api/topics`, {
                 method: 'POST',
                 headers: {

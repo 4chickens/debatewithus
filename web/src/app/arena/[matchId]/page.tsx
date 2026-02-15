@@ -22,7 +22,7 @@ export default function ArenaPage() {
 
     // 1. Initialize Socket Connection
     useEffect(() => {
-        const socketUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000';
+        const socketUrl = process.env.NEXT_PUBLIC_SERVER_URL;
         const socket = io(socketUrl);
         socketRef.current = socket;
 
