@@ -98,6 +98,14 @@ setInterval(() => {
 }, 1000);
 
 // Endpoints
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    version: '1.0.4'
+  });
+});
+
 app.get('/token', async (req, res) => {
   try {
     const { room, identity, host } = req.query;
