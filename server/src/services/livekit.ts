@@ -19,20 +19,26 @@ const apiSecret = process.env.LIVEKIT_API_SECRET;
  */
 export const generateToken = async (roomName: string, identity: string, isHost: boolean = false) => {
     if (!apiKey || !apiSecret) {
-        throw new Error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET are required');
+        console.error('[LiveKit] Missing API Key or Secret. Token generation failed.');
+        throw new Error('LiveKit configuration is missing on the server. Please check environment variables.');
     }
 
-    const at = new AccessToken(apiKey, apiSecret, {
-        identity,
-    });
+    try {
+        const at = new AccessToken(apiKey, apiSecret, {
+            identity,
+        });
 
-    at.addGrant({
-        roomJoin: true,
-        room: roomName,
-        canPublish: isHost,
-        canSubscribe: true,
-        canPublishData: true,
-    });
+        at.addGrant({
+            roomJoin: true,
+            room: roomName,
+            canPublish: isHost,
+            canSubscribe: true,
+            canPublishData: true,
+        });
 
-    return await at.toJwt();
+        return await at.toJwt();
+    } catch (err) {
+        console.error('[LiveKit] Token generation error:', err);
+        throw new Error('Failed to generate LiveKit token.');
+    }
 };
