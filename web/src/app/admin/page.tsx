@@ -6,10 +6,23 @@ import { useRouter } from 'next/navigation';
 import { Check, X, Shield, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 
+interface Topic {
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    created_at: string;
+    topic_tags?: Array<{
+        tags: {
+            name: string;
+        };
+    }>;
+}
+
 export default function AdminPage() {
     const router = useRouter();
     const { user, token } = useAuthStore();
-    const [pendingTopics, setPendingTopics] = useState([]);
+    const [pendingTopics, setPendingTopics] = useState<Topic[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {

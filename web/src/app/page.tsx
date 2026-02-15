@@ -3,14 +3,30 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Swords, Search, Plus, User, LogOut, Loader2, Sparkles } from 'lucide-react';
+import { Swords, Search, Plus, User, LogOut, Loader2, Sparkles, Users } from 'lucide-react';
 import TopicCard from '@/components/TopicCard';
 import { useAuthStore } from '@/store/authStore';
+
+interface Topic {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail_url?: string;
+  upvotes: number;
+  created_at: string;
+  status: string;
+  created_by?: { username: string };
+  topic_tags?: Array<{
+    tags: {
+      name: string;
+    };
+  }>;
+}
 
 export default function Home() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const [topics, setTopics] = useState([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -122,8 +138,8 @@ export default function Home() {
               key={tag}
               onClick={() => setSearchQuery(tag === '#ALL' ? '' : tag)}
               className={`px-6 py-2 rounded-full border text-[10px] font-mono tracking-widest uppercase transition-all whitespace-nowrap ${(searchQuery === tag || (tag === '#ALL' && searchQuery === ''))
-                  ? 'bg-neon-cyan text-black border-neon-cyan font-bold shadow-[0_0_20px_rgba(0,243,255,0.3)]'
-                  : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                ? 'bg-neon-cyan text-black border-neon-cyan font-bold shadow-[0_0_20px_rgba(0,243,255,0.3)]'
+                : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
                 }`}
             >
               {tag}
