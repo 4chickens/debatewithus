@@ -87,15 +87,54 @@ export async function createUser(username: string, email: string, passwordPlain:
     if (!supabase) throw new Error('Database not configured');
 
     const passwordHash = await bcrypt.hash(passwordPlain, 10);
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins
 
     const { data, error } = await supabase
         .from('users')
-        .insert([{ username, email, password_hash: passwordHash, role: 'user' }])
+        .insert([{
+            username,
+            email,
+            password_hash: passwordHash,
+            role: 'user',
+            is_verified: false,
+            verification_code: verificationCode,
+            code_expires_at: expiresAt
+        }])
         .select()
         .single();
 
     if (error) throw error;
     return data;
+}
+
+export async function verifyUserCode(email: string, code: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('id, verification_code, code_expires_at')
+        .eq('email', email)
+        .single();
+
+    if (error || !user) throw new Error('User not found');
+
+    if (user.verification_code !== code) throw new Error('Invalid verification code');
+
+    const now = new Date();
+    if (new Date(user.code_expires_at) < now) throw new Error('Verification code expired');
+
+    const { error: updateError } = await supabase
+        .from('users')
+        .update({
+            is_verified: true,
+            verification_code: null,
+            code_expires_at: null
+        })
+        .eq('id', user.id);
+
+    if (updateError) throw updateError;
+    return true;
 }
 
 export async function findUserByIdentifier(identifier: string) {

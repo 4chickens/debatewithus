@@ -14,7 +14,8 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus } from './services/supabase.js';
+import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus, verifyUserCode } from './services/supabase.js';
+import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
 
@@ -135,22 +136,60 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     const user = await createUser(username, email, password);
-    const token = generateUserToken({ id: user.id, username: user.username, role: user.role });
 
-    res.status(201).json({ token, user: { id: user.id, username: user.username, role: user.role } });
+    // SEND SECURE VERIFICATION CODE
+    await sendVerificationEmail(email, user.verification_code);
+
+    res.status(201).json({
+      message: 'Verification code sent to your email',
+      email: user.email
+    });
   } catch (err: any) {
     console.error('Signup failed:', err);
     res.status(500).json({ error: err.message || 'Signup failed' });
   }
 });
 
+app.post('/api/auth/verify', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code are required' });
+    }
+
+    await verifyUserCode(email, code);
+
+    // Once verified, we could return a token here or ask them to login
+    // Let's return the user data so the frontend can auto-login
+    const user = await findUserByIdentifier(email);
+    const token = generateUserToken({ id: user.id, username: user.username, role: user.role });
+
+    res.json({
+      message: 'Email verified successfully',
+      token,
+      user: { id: user.id, username: user.username, role: user.role }
+    });
+  } catch (err: any) {
+    console.error('Verification failed:', err);
+    res.status(400).json({ error: err.message || 'Verification failed' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { identifier, password } = req.body; // identifier can be email or username
+    const { identifier, password } = req.body;
     const user = await findUserByIdentifier(identifier);
 
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!user.is_verified) {
+      return res.status(403).json({
+        error: 'Email not verified',
+        email: user.email,
+        requiresVerification: true
+      });
     }
 
     const token = generateUserToken({ id: user.id, username: user.username, role: user.role });

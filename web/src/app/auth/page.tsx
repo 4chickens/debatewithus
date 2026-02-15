@@ -3,20 +3,24 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { User, Mail, Lock, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+
+type AuthState = 'login' | 'signup' | 'verify';
 
 export default function AuthPage() {
     const router = useRouter();
     const setAuth = useAuthStore(state => state.setAuth);
-    const [isLogin, setIsLogin] = useState(true);
+    const [authState, setAuthState] = useState<AuthState>('login');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [verifyEmail, setVerifyEmail] = useState('');
 
     const [form, setForm] = useState({
         username: '',
         email: '',
         password: '',
+        code: '',
     });
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -24,12 +28,27 @@ export default function AuthPage() {
         setIsLoading(true);
         setError('');
 
-        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-        const body = isLogin
-            ? { identifier: form.email || form.username, password: form.password }
-            : { username: form.username, email: form.email, password: form.password };
-
         try {
+            if (authState === 'verify') {
+                const res = await fetch(`http://localhost:4000/api/auth/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: verifyEmail, code: form.code }),
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+
+                setAuth(data.user, data.token);
+                router.push('/');
+                return;
+            }
+
+            const endpoint = authState === 'login' ? '/api/auth/login' : '/api/auth/signup';
+            const body = authState === 'login'
+                ? { identifier: form.email || form.username, password: form.password }
+                : { username: form.username, email: form.email, password: form.password };
+
             const res = await fetch(`http://localhost:4000${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -37,7 +56,22 @@ export default function AuthPage() {
             });
 
             const data = await res.json();
+
+            if (res.status === 403 && data.requiresVerification) {
+                setVerifyEmail(data.email);
+                setAuthState('verify');
+                setError('Please verify your email to continue.');
+                return;
+            }
+
             if (!res.ok) throw new Error(data.error);
+
+            if (authState === 'signup') {
+                setVerifyEmail(form.email);
+                setAuthState('verify');
+                setError(''); // Clear error on successful signup
+                return;
+            }
 
             setAuth(data.user, data.token);
             router.push('/');
@@ -62,12 +96,24 @@ export default function AuthPage() {
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-neon-cyan/10 blur-[100px] rounded-full" />
                 <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-neon-pink/10 blur-[100px] rounded-full" />
 
-                <div className="text-center space-y-2 mb-10">
+                <div className="text-center space-y-2 mb-10 relative">
+                    {authState === 'verify' && (
+                        <button
+                            onClick={() => setAuthState('signup')}
+                            className="absolute -left-6 top-1 text-white/20 hover:text-white transition-colors"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+                    )}
                     <h1 className="text-4xl font-black italic tracking-tighter uppercase">
-                        {isLogin ? 'Welcome Back' : 'Join the Fight'}
+                        {authState === 'login' ? 'Welcome Back' : authState === 'signup' ? 'Join the Fight' : 'Secure Access'}
                     </h1>
                     <p className="text-white/40 font-mono text-[10px] tracking-widest uppercase">
-                        {isLogin ? 'Sign in to your account' : 'Create your debate profile'}
+                        {authState === 'login'
+                            ? 'Sign in to your account'
+                            : authState === 'signup'
+                                ? 'Create your debate profile'
+                                : `Code sent to ${verifyEmail}`}
                     </p>
                 </div>
 
@@ -82,52 +128,87 @@ export default function AuthPage() {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {!isLogin && (
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">Username</label>
-                            <div className="relative group">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
-                                <input
-                                    type="text"
-                                    required
-                                    value={form.username}
-                                    onChange={(e) => setForm({ ...form, username: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
-                                    placeholder="Enter username"
-                                />
-                            </div>
-                        </div>
-                    )}
+                    <AnimatePresence mode="wait">
+                        {authState === 'verify' ? (
+                            <motion.div
+                                key="verify"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                className="space-y-4"
+                            >
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">6-Digit Code</label>
+                                    <div className="relative group">
+                                        <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
+                                        <input
+                                            type="text"
+                                            required
+                                            maxLength={6}
+                                            value={form.code}
+                                            onChange={(e) => setForm({ ...form, code: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-center text-xl font-bold tracking-[0.5em] focus:outline-none focus:border-neon-cyan/50 transition-all placeholder:text-white/5"
+                                            placeholder="000000"
+                                        />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="entry"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="space-y-4"
+                            >
+                                {authState === 'signup' && (
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">Username</label>
+                                        <div className="relative group">
+                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
+                                            <input
+                                                type="text"
+                                                required
+                                                value={form.username}
+                                                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                                                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
+                                                placeholder="Enter username"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">{isLogin ? 'Email or Username' : 'Email Address'}</label>
-                        <div className="relative group">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
-                            <input
-                                type="text"
-                                required
-                                value={form.email}
-                                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
-                                placeholder={isLogin ? "you@example.com or user" : "you@example.com"}
-                            />
-                        </div>
-                    </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">{authState === 'login' ? 'Email or Username' : 'Email Address'}</label>
+                                    <div className="relative group">
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
+                                        <input
+                                            type="text"
+                                            required
+                                            value={form.email}
+                                            onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
+                                            placeholder={authState === 'login' ? "you@example.com or user" : "you@example.com"}
+                                        />
+                                    </div>
+                                </div>
 
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">Password</label>
-                        <div className="relative group">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
-                            <input
-                                type="password"
-                                required
-                                value={form.password}
-                                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
-                                placeholder="••••••••"
-                            />
-                        </div>
-                    </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest ml-1">Password</label>
+                                    <div className="relative group">
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-neon-cyan transition-colors" size={18} />
+                                        <input
+                                            type="password"
+                                            required
+                                            value={form.password}
+                                            onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-neon-cyan/50 transition-all"
+                                            placeholder="••••••••"
+                                        />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     <button
                         type="submit"
@@ -136,7 +217,7 @@ export default function AuthPage() {
                     >
                         {isLoading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
-                                {isLogin ? 'AUTHENTICATE' : 'INITIALIZE PROFILE'}
+                                {authState === 'login' ? 'AUTHENTICATE' : authState === 'signup' ? 'INITIALIZE PROFILE' : 'VERIFY IDENTITY'}
                                 <ArrowRight size={18} />
                             </>
                         )}
@@ -145,10 +226,10 @@ export default function AuthPage() {
 
                 <div className="mt-8 pt-8 border-t border-white/5 text-center">
                     <button
-                        onClick={() => setIsLogin(!isLogin)}
+                        onClick={() => setAuthState(authState === 'login' ? 'signup' : 'login')}
                         className="text-[10px] font-mono text-white/20 hover:text-neon-cyan uppercase tracking-widest transition-colors"
                     >
-                        {isLogin ? "Don't have an account? Create one" : "Already have an account? Sign in"}
+                        {authState === 'login' ? "Don't have an account? Create one" : "Already have an account? Sign in"}
                     </button>
                 </div>
             </motion.div>
