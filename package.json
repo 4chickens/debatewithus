@@ -10,7 +10,6 @@
     "dev:web": "npm run dev -w web",
     "dev:server": "npm run dev -w server",
     "build:all": "npm run build --workspaces --if-present",
-    "install:all": "npm install",
-    "sync-env": "copy .env web\\.env && copy .env server\\.env"
+    "install:all": "npm install"
   }
 }
