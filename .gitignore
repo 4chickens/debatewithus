@@ -5,6 +5,8 @@ dist/
 build/
 
 # Environment Variables
+**/.env*
+**/* .env*
 .env
 .env.local
 .env.*.local
