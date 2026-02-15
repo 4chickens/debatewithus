@@ -1,26 +1,50 @@
+import nodemailer from 'nodemailer';
+
 /**
  * DEBATE_ME // MAIL SERVICE
- * Handles sending verification emails.
- * Mock implementation that logs to console if no API KEY is present.
+ * Handles sending verification emails using Gmail SMTP.
  */
 
-export const sendVerificationEmail = async (email: string, code: string) => {
-    console.log('==========================================');
-    console.log(`SECURE MAIL TO: ${email}`);
-    console.log(`VERIFICATION CODE: ${code}`);
-    console.log('==========================================');
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
-    // In production, you would integrate Resend or SendGrid here
-    // Example for Resend:
-    /*
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: 'onboarding@resend.dev',
+export const sendVerificationEmail = async (email: string, code: string) => {
+  // If no credentials, log to console for safety
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.warn('⚠️ GMAIL_USER or GMAIL_APP_PASSWORD missing. Logging code to console:');
+    console.log(`[AUTH] Code for ${email}: ${code}`);
+    return true;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"DEBATE_ME" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: 'DEBATE_ME // VERIFICATION CODE',
-      html: `<p>Your code is <strong>${code}</strong></p>`
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+          <h2 style="color: #FF007F;">WELCOME TO THE ARENA</h2>
+          <p>Your authentication code is:</p>
+          <div style="background: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px;">
+            ${code}
+          </div>
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">
+            This code expires in 15 minutes. If you didn't request this, just ignore it.
+          </p>
+        </div>
+      `,
     });
-    */
-
+    console.log(`✅ Verification email sent to ${email}`);
     return true;
+  } catch (error) {
+    console.error('❌ Failed to send verification email:', error);
+    // Even if it fails, we log it locally so user isn't stuck during setup
+    console.log(`[DEBUG] Backup code for ${email}: ${code}`);
+    return false;
+  }
 };
