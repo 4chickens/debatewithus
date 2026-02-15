@@ -19,18 +19,32 @@ import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
 
-const app = express();
+const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://debatewithus.vercel.app';
+
 app.use(cors({
-  origin: process.env.NEXT_PUBLIC_APP_URL || '*',
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    if (origin === allowedOrigin || origin.startsWith('http://localhost') || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked for origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.NEXT_PUBLIC_APP_URL || '*',
+    origin: allowedOrigin,
     methods: ['GET', 'POST'],
+    credentials: true
   },
 });
 
