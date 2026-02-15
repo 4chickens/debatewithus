@@ -65,10 +65,10 @@ export default function Home() {
             animate={{ opacity: 1, x: 0 }}
             className="text-neon-cyan text-[10px] font-mono tracking-[0.5em] uppercase"
           >
-            v1.0.4-beta // DEBATE_ME
+            v1.1.0-beta // debatewithus
           </motion.div>
           <h1 className="text-4xl font-black italic tracking-tighter hover:text-neon-cyan transition-colors cursor-pointer" onClick={() => router.push('/')}>
-            DEBATE_ME
+            debatewithus
           </h1>
         </div>
 
@@ -185,7 +185,7 @@ export default function Home() {
           </div>
         </div>
         <div>
-          © 2026 DEBATE_ME // ALL RIGHTS RESERVED
+          © 2026 debatewithus // THE ARENA
         </div>
       </footer>
 

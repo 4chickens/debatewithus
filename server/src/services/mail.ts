@@ -23,12 +23,12 @@ export const sendVerificationEmail = async (email: string, code: string) => {
 
   try {
     await transporter.sendMail({
-      from: `"DEBATE_ME" <${process.env.GMAIL_USER}>`,
+      from: `"DEBATEWITHUS" <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: 'DEBATE_ME // VERIFICATION CODE',
+      subject: 'debatewithus // VERIFICATION CODE',
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
-          <h2 style="color: #FF007F;">WELCOME TO THE ARENA</h2>
+          <h2 style="color: #FF007F;">WELCOME TO DEBATEWITHUS</h2>
           <p>Your authentication code is:</p>
           <div style="background: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px;">
             ${code}
