@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus, verifyUserCode } from './services/supabase.js';
+import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser } from './services/supabase.js';
 import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
@@ -163,16 +163,24 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const existing = await findUserByIdentifier(email);
     if (existing) {
-      return res.status(400).json({ error: 'User already exists' });
+      if (existing.is_verified) {
+        // Already verified — block duplicate signup
+        return res.status(400).json({ error: 'User already exists' });
+      }
+      // Not verified — delete old record so they can re-signup with a fresh code
+      console.log(`[AUTH] Removing unverified user ${email} for re-signup`);
+      await deleteUnverifiedUser(email);
     }
 
     const user = await createUser(username, email, password);
 
     // SEND SECURE VERIFICATION CODE
-    await sendVerificationEmail(email, user.verification_code);
+    const emailSent = await sendVerificationEmail(email, user.verification_code);
 
     res.status(201).json({
-      message: 'Verification code sent to your email',
+      message: emailSent
+        ? 'Verification code sent to your email'
+        : 'Account created. Check your email or contact support for your code.',
       email: user.email
     });
   } catch (err: any) {

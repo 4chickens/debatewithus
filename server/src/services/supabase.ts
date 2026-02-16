@@ -108,6 +108,23 @@ export async function createUser(username: string, email: string, passwordPlain:
     return data;
 }
 
+/**
+ * Deletes an unverified user by email so they can re-signup.
+ * Safety: only deletes rows where is_verified === false.
+ */
+export async function deleteUnverifiedUser(email: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('email', email)
+        .eq('is_verified', false);
+
+    if (error) throw error;
+}
+
+
 export async function verifyUserCode(email: string, code: string) {
     if (!supabase) throw new Error('Database not configured');
 

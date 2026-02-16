@@ -3,11 +3,14 @@ import { Request, Response, NextFunction } from 'express';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'antigravity-secret-key-1337';
 
+/** Valid user roles */
+export type UserRole = 'user' | 'admin' | 'streamer' | 'creator';
+
 export interface AuthRequest extends Request {
     user?: {
         id: string;
         username: string;
-        role: string;
+        role: UserRole;
     };
 }
 
@@ -32,18 +35,23 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 };
 
 /**
- * Middleware to restrict access to Admins only.
+ * Middleware factory to restrict access to specific roles.
  */
-export const authorizeAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
+export const authorizeRole = (...allowedRoles: UserRole[]) => {
+    return (req: AuthRequest, res: Response, next: NextFunction) => {
+        if (!req.user?.role || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ error: `Access restricted to: ${allowedRoles.join(', ')}` });
+        }
+        next();
+    };
 };
+
+/** Shortcut: Admin only */
+export const authorizeAdmin = authorizeRole('admin');
 
 /**
  * Generate a JWT token for a user.
  */
-export const generateUserToken = (user: { id: string; username: string; role: string }) => {
+export const generateUserToken = (user: { id: string; username: string; role: UserRole }) => {
     return jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
 };
