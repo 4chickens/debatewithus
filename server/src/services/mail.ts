@@ -6,24 +6,32 @@ import nodemailer from 'nodemailer';
  */
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    pass: process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, ''), // Clean any accidental spaces from Railway UI
   },
 });
 
 export const sendVerificationEmail = async (email: string, code: string) => {
-  // If no credentials, log to console for safety
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    console.warn('⚠️ GMAIL_USER or GMAIL_APP_PASSWORD missing. Logging code to console:');
-    console.log(`[AUTH] Code for ${email}: ${code}`);
-    return true;
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPass = process.env.GMAIL_APP_PASSWORD;
+
+  // Always log the code to console so user can check Railway logs if email fails
+  console.log('--------------------------------------------------');
+  console.log(`[AUTH_SYSTEM] VERIFICATION CODE FOR ${email}: ${code}`);
+  console.log('--------------------------------------------------');
+
+  if (!gmailUser || !gmailPass) {
+    console.warn('⚠️ GMAIL_USER or GMAIL_APP_PASSWORD missing in env.');
+    return true; // Return true to allow unblocked flow during dev
   }
 
   try {
     await transporter.sendMail({
-      from: `"DEBATEWITHUS" <${process.env.GMAIL_USER}>`,
+      from: `"DEBATEWITHUS" <${gmailUser}>`,
       to: email,
       subject: 'debatewithus // VERIFICATION CODE',
       html: `
@@ -43,8 +51,6 @@ export const sendVerificationEmail = async (email: string, code: string) => {
     return true;
   } catch (error) {
     console.error('❌ Failed to send verification email:', error);
-    // Even if it fails, we log it locally so user isn't stuck during setup
-    console.log(`[DEBUG] Backup code for ${email}: ${code}`);
     return false;
   }
 };
