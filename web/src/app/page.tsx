@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Swords, Search, Plus, User, LogOut, Loader2, Sparkles, Users } from 'lucide-react';
 import TopicCard from '@/components/TopicCard';
 import { useAuthStore } from '@/store/authStore';
+import { API_URL } from '@/config';
 
 interface Topic {
   id: string;
@@ -33,7 +34,6 @@ export default function Home() {
   useEffect(() => {
     const fetchTopics = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
         const res = await fetch(`${API_URL}/api/topics`);
         const data = await res.json();
         setTopics(data);

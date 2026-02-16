@@ -21,6 +21,8 @@ import bcrypt from 'bcryptjs';
 
 const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://debatewithus.vercel.app';
 
+const app = express();
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl)

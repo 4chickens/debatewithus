@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Plus, Tag, Image, Send, ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { API_URL } from '@/config';
 
 export default function NewTopicPage() {
     const router = useRouter();
@@ -29,7 +30,6 @@ export default function NewTopicPage() {
         const tagsArray = form.tags.split(',').map(t => t.trim()).filter(t => t !== '');
 
         try {
-            const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
             const res = await fetch(`${API_URL}/api/topics`, {
                 method: 'POST',
                 headers: {

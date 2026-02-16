@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { User, Mail, Lock, ArrowRight, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { API_URL } from '@/config';
 
 type AuthState = 'login' | 'signup' | 'verify';
 
@@ -30,7 +31,6 @@ export default function AuthPage() {
 
         try {
             if (authState === 'verify') {
-                const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
                 const res = await fetch(`${API_URL}/api/auth/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -50,7 +50,6 @@ export default function AuthPage() {
                 ? { identifier: form.email || form.username, password: form.password }
                 : { username: form.username, email: form.email, password: form.password };
 
-            const API_URL = process.env.NEXT_PUBLIC_SERVER_URL;
             const res = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
