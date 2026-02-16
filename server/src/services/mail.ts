@@ -3,31 +3,38 @@ import nodemailer from 'nodemailer';
 /**
  * DEBATE_ME // MAIL SERVICE
  * Handles sending verification emails using Gmail SMTP.
+ *
+ * IMPORTANT: The transporter is created LAZILY inside the function,
+ * NOT at module scope. This is because ES module imports are hoisted
+ * and evaluated BEFORE dotenv.config() runs in index.ts.
+ * Creating the transporter at module scope would result in
+ * undefined credentials every time.
  */
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, ''), // Clean any accidental spaces from Railway UI
-  },
-});
 
 export const sendVerificationEmail = async (email: string, code: string) => {
   const gmailUser = process.env.GMAIL_USER;
-  const gmailPass = process.env.GMAIL_APP_PASSWORD;
+  const gmailPass = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, '');
 
-  // Always log the code to console so user can check Railway logs if email fails
-  console.log('--------------------------------------------------');
-  console.log(`[AUTH_SYSTEM] VERIFICATION CODE FOR ${email}: ${code}`);
-  console.log('--------------------------------------------------');
+  console.log(`[MAIL] Attempting to send verification to ${email}`);
+  console.log(`[MAIL] GMAIL_USER configured: ${!!gmailUser}`);
+  console.log(`[MAIL] GMAIL_APP_PASSWORD configured: ${!!gmailPass}`);
 
   if (!gmailUser || !gmailPass) {
     console.warn('⚠️ GMAIL_USER or GMAIL_APP_PASSWORD missing in env.');
-    return true; // Return true to allow unblocked flow during dev
+    console.log(`[AUTH_FALLBACK] CODE FOR ${email}: ${code}`);
+    return true;
   }
+
+  // Create transporter HERE, after dotenv has loaded env vars
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: gmailUser,
+      pass: gmailPass,
+    },
+  });
 
   try {
     await transporter.sendMail({
@@ -51,6 +58,7 @@ export const sendVerificationEmail = async (email: string, code: string) => {
     return true;
   } catch (error) {
     console.error('❌ Failed to send verification email:', error);
+    console.log(`[AUTH_FALLBACK] CODE FOR ${email}: ${code}`);
     return false;
   }
 };
