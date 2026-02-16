@@ -8,6 +8,7 @@ import { AvatarVisualizer } from '@/components/AvatarVisualizer';
 import { Timer, Zap, Mic, MicOff, Home } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { useRouter, useParams } from 'next/navigation';
+import { API_URL } from '@/config';
 
 export default function ArenaPage() {
     const { matchId } = useParams();
@@ -22,8 +23,7 @@ export default function ArenaPage() {
 
     // 1. Initialize Socket Connection
     useEffect(() => {
-        const socketUrl = process.env.NEXT_PUBLIC_SERVER_URL;
-        const socket = io(socketUrl);
+        const socket = io(API_URL);
         socketRef.current = socket;
 
         socket.on('connect', () => {
