@@ -261,3 +261,25 @@ export async function updateTopicStatus(topicId: string, status: 'active' | 'arc
     if (error) throw error;
     return data;
 }
+
+/**
+ * Uploads an image to Supabase Storage.
+ */
+export async function uploadImage(bucket: string, fileName: string, buffer: Buffer, mimeType: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, buffer, {
+            contentType: mimeType,
+            upsert: true
+        });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(fileName);
+
+    return publicUrl;
+}

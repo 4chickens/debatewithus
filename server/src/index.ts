@@ -14,10 +14,11 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser } from './services/supabase.js';
+import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
 import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
 
 const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://debatewithus.vercel.app';
 
@@ -236,6 +237,38 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err: any) {
     console.error('Login failed:', err);
     res.status(500).json({ error: err.message || 'Login failed' });
+  }
+});
+
+// --- Upload Routes ---
+
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.'));
+    }
+  }
+});
+
+app.post('/api/upload', authenticateToken as any, upload.single('image'), async (req: AuthRequest & { file?: Express.Multer.File }, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileName = `thumbnails/${Date.now()}-${req.file.originalname}`;
+    const publicUrl = await uploadImage('thumbnails', fileName, req.file.buffer, req.file.mimetype);
+
+    res.json({ url: publicUrl });
+  } catch (err: any) {
+    console.error('Upload failed:', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
 
