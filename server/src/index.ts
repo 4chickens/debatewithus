@@ -28,7 +28,13 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
 
-    if (origin === allowedOrigin || origin.startsWith('http://localhost') || process.env.NODE_ENV === 'development') {
+    const isAllowed =
+      origin === allowedOrigin ||
+      origin.startsWith('http://localhost') ||
+      origin.endsWith('.vercel.app') ||
+      process.env.NODE_ENV === 'development';
+
+    if (isAllowed) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked for origin: ${origin}`);
@@ -44,7 +50,13 @@ app.use(express.json());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigin,
+    origin: (origin, callback) => {
+      if (!origin || origin === allowedOrigin || origin.startsWith('http://localhost') || origin.endsWith('.vercel.app') || process.env.NODE_ENV === 'development') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true
   },
