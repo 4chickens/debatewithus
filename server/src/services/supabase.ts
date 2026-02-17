@@ -197,6 +197,25 @@ export async function getActiveTopics(tag?: string) {
     return data;
 }
 
+export async function getPendingTopics() {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+        .from('topics')
+        .select(`
+            *,
+            created_by (username),
+            topic_tags (
+                tags (name)
+            )
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+}
+
 export async function submitTopic(title: string, description: string, userId: string, tags: string[], thumbnailUrl?: string) {
     if (!supabase) throw new Error('Database not configured');
 

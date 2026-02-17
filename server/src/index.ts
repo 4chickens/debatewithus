@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
+import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, getPendingTopics, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
 import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
@@ -341,6 +341,16 @@ apiRouter.post('/admin/topics/:id/approve', authenticateToken as any, authorizeA
   } catch (err: any) {
     console.error('Approval failed:', err);
     res.status(500).json({ error: err.message || 'Failed to approve topic' });
+  }
+});
+
+apiRouter.get('/admin/topics/pending', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
+  try {
+    const topics = await getPendingTopics();
+    res.json(topics);
+  } catch (err: any) {
+    console.error('Fetch pending topics failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch pending topics' });
   }
 });
 

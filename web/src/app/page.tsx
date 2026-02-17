@@ -36,7 +36,7 @@ export default function Home() {
       try {
         const res = await fetch(`${API_URL}/api/topics`);
         if (!res.ok) throw new Error(`Failed to fetch topics: ${res.status}`);
-        
+
         const contentType = res.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           const data = await res.json();
@@ -95,6 +95,14 @@ export default function Home() {
 
           {user ? (
             <div className="flex items-center gap-4">
+              {user.role === 'admin' && (
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="px-4 py-2 bg-neon-purple/20 hover:bg-neon-purple/30 border border-neon-purple/50 rounded-lg text-neon-purple font-bold text-xs tracking-widest uppercase transition-all"
+                >
+                  Dashboard
+                </button>
+              )}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-bold text-neon-cyan uppercase">@{user.username}</span>
                 <span className="text-[10px] text-white/40 uppercase tracking-tighter">{user.role} rank</span>

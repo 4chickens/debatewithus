@@ -34,13 +34,17 @@ export default function AdminPage() {
 
         const fetchPending = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/topics`);
+                const res = await fetch(`${API_URL}/api/admin/topics/pending`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 if (!res.ok) throw new Error(`Failed to fetch topics: ${res.status}`);
-                
+
                 const contentType = res.headers.get('content-type');
                 if (contentType && contentType.includes('application/json')) {
                     const data = await res.json();
-                    setPendingTopics(data.filter((t: any) => t.status === 'pending'));
+                    setPendingTopics(data);
                 } else {
                     throw new Error('Server returned non-JSON response');
                 }
