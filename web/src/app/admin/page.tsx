@@ -34,13 +34,16 @@ export default function AdminPage() {
 
         const fetchPending = async () => {
             try {
-                // For now, reuse the topics API and filter manually if the backend doesn't have a separate endpoint
-                // Actually, I should have an admin endpoint. Let's assume there's one or fetch all and filter.
                 const res = await fetch(`${API_URL}/api/topics`);
-                const data = await res.json();
-                // We're showing all active topics on the home, but for admin we might want more.
-                // Ideally, a GET /api/admin/topics exists.
-                setPendingTopics(data.filter((t: any) => t.status === 'pending'));
+                if (!res.ok) throw new Error(`Failed to fetch topics: ${res.status}`);
+                
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    setPendingTopics(data.filter((t: any) => t.status === 'pending'));
+                } else {
+                    throw new Error('Server returned non-JSON response');
+                }
             } catch (err) {
                 console.error(err);
             } finally {
@@ -61,9 +64,18 @@ export default function AdminPage() {
 
             if (res.ok) {
                 setPendingTopics(pendingTopics.filter((t: any) => t.id !== id));
+            } else {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    alert(data.error || 'Action failed');
+                } else {
+                    alert(`Action failed (${res.status})`);
+                }
             }
         } catch (err) {
             console.error(err);
+            alert('Failed to perform action');
         }
     };
 

@@ -47,6 +47,16 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+const apiRouter = express.Router();
+app.use('/api', apiRouter);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -135,11 +145,20 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'online',
     timestamp: new Date().toISOString(),
-    version: '1.0.4'
+    version: '1.0.5'
   });
 });
 
-app.get('/token', async (req, res) => {
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    version: '1.0.5',
+    api: 'v1'
+  });
+});
+
+apiRouter.get('/token', async (req, res) => {
   try {
     const { room, identity, host } = req.query;
     if (!room || !identity) {
@@ -155,7 +174,7 @@ app.get('/token', async (req, res) => {
 
 // --- Auth Routes ---
 
-app.post('/api/auth/signup', async (req, res) => {
+apiRouter.post('/auth/signup', async (req, res) => {
   try {
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -190,7 +209,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/verify', async (req, res) => {
+apiRouter.post('/auth/verify', async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
@@ -215,7 +234,7 @@ app.post('/api/auth/verify', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+apiRouter.post('/auth/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
     const user = await findUserByIdentifier(identifier);
@@ -256,25 +275,39 @@ const upload = multer({
   }
 });
 
-app.post('/api/upload', authenticateToken as any, upload.single('image'), async (req: AuthRequest & { file?: Express.Multer.File }, res) => {
+apiRouter.post('/upload', authenticateToken as any, (req: any, res: any, next: any) => {
+  upload.single('image')(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      console.warn('[UPLOAD] Multer error:', err);
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      console.error('[UPLOAD] General error:', err);
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req: AuthRequest & { file?: Express.Multer.File }, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const fileName = `thumbnails/${Date.now()}-${req.file.originalname}`;
+    // Clean filename: remove 'thumbnails/' prefix since the bucket is already 'thumbnails'
+    const fileName = `${Date.now()}-${req.file.originalname.replace(/\s+/g, '_')}`;
+    console.log(`[UPLOAD] Processing file: ${fileName}, size: ${req.file.size} bytes`);
+
     const publicUrl = await uploadImage('thumbnails', fileName, req.file.buffer, req.file.mimetype);
 
     res.json({ url: publicUrl });
   } catch (err: any) {
-    console.error('Upload failed:', err);
+    console.error('[UPLOAD] Logic failed:', err);
     res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
 
 // --- Topic Routes ---
 
-app.get('/api/topics', async (req, res) => {
+apiRouter.get('/topics', async (req, res) => {
   try {
     const { tag } = req.query;
     const topics = await getActiveTopics(tag as string);
@@ -285,7 +318,7 @@ app.get('/api/topics', async (req, res) => {
   }
 });
 
-app.post('/api/topics', authenticateToken as any, async (req: AuthRequest, res) => {
+apiRouter.post('/topics', authenticateToken as any, async (req: AuthRequest, res) => {
   try {
     const { title, description, tags, thumbnail_url } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
@@ -300,7 +333,7 @@ app.post('/api/topics', authenticateToken as any, async (req: AuthRequest, res) 
 
 // --- Admin Routes ---
 
-app.post('/api/admin/topics/:id/approve', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
+apiRouter.post('/admin/topics/:id/approve', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
   try {
     const { id } = req.params;
     const topic = await updateTopicStatus(id, 'active');
@@ -380,6 +413,20 @@ io.on('connection', (socket) => {
     if (dgConnections[socket.id]) {
       delete dgConnections[socket.id];
     }
+  });
+});
+
+// 404 Handler
+app.use((req: express.Request, res: express.Response) => {
+  res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
+});
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[SERVER ERROR]', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    path: req.path
   });
 });
 

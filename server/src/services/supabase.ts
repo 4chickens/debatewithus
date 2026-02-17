@@ -266,7 +266,12 @@ export async function updateTopicStatus(topicId: string, status: 'active' | 'arc
  * Uploads an image to Supabase Storage.
  */
 export async function uploadImage(bucket: string, fileName: string, buffer: Buffer, mimeType: string) {
-    if (!supabase) throw new Error('Database not configured');
+    if (!supabase) {
+        console.error('[Supabase] Storage error: Client not initialized');
+        throw new Error('Database storage not configured');
+    }
+
+    console.log(`[Supabase] Uploading to ${bucket}/${fileName} (${mimeType})...`);
 
     const { data, error } = await supabase.storage
         .from(bucket)
@@ -275,11 +280,15 @@ export async function uploadImage(bucket: string, fileName: string, buffer: Buff
             upsert: true
         });
 
-    if (error) throw error;
+    if (error) {
+        console.error('[Supabase] Storage upload error:', error);
+        throw new Error(`Failed to upload to storage: ${error.message}`);
+    }
 
     const { data: { publicUrl } } = supabase.storage
         .from(bucket)
         .getPublicUrl(fileName);
 
+    console.log(`[Supabase] Upload successful: ${publicUrl}`);
     return publicUrl;
 }

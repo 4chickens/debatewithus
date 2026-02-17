@@ -37,9 +37,17 @@ export default function AuthPage() {
                     body: JSON.stringify({ email: verifyEmail, code: form.code }),
                 });
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
+                if (!res.ok) {
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await res.json();
+                        throw new Error(data.error);
+                    } else {
+                        throw new Error(`Verification failed (${res.status})`);
+                    }
+                }
 
+                const data = await res.json();
                 setAuth(data.user, data.token);
                 router.push('/');
                 return;
@@ -56,16 +64,23 @@ export default function AuthPage() {
                 body: JSON.stringify(body),
             });
 
-            const data = await res.json();
-
-            if (res.status === 403 && data.requiresVerification) {
-                setVerifyEmail(data.email);
-                setAuthState('verify');
-                setError('Please verify your email to continue.');
-                return;
+            if (!res.ok) {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    if (res.status === 403 && data.requiresVerification) {
+                        setVerifyEmail(data.email);
+                        setAuthState('verify');
+                        setError('Please verify your email to continue.');
+                        return;
+                    }
+                    throw new Error(data.error);
+                } else {
+                    throw new Error(`Auth failed (${res.status})`);
+                }
             }
 
-            if (!res.ok) throw new Error(data.error);
+            const data = await res.json();
 
             if (authState === 'signup') {
                 setVerifyEmail(form.email);

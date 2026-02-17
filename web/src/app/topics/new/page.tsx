@@ -53,8 +53,15 @@ export default function NewTopicPage() {
             });
 
             if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Upload failed');
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Upload failed');
+                } else {
+                    const text = await res.text();
+                    console.error('Server returned non-JSON error:', text);
+                    throw new Error(`Upload failed (${res.status}): ${res.statusText}`);
+                }
             }
 
             const data = await res.json();
@@ -90,12 +97,20 @@ export default function NewTopicPage() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Submission failed');
+            if (!res.ok) {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Submission failed');
+                } else {
+                    throw new Error(`Submission failed (${res.status}): ${res.statusText}`);
+                }
+            }
 
             router.push('/');
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            alert('Failed to submit topic. Try again.');
+            alert(err.message || 'Failed to submit topic. Try again.');
         } finally {
             setIsLoading(false);
         }

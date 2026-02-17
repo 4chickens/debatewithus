@@ -35,8 +35,15 @@ export default function Home() {
     const fetchTopics = async () => {
       try {
         const res = await fetch(`${API_URL}/api/topics`);
-        const data = await res.json();
-        setTopics(data);
+        if (!res.ok) throw new Error(`Failed to fetch topics: ${res.status}`);
+        
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          setTopics(data);
+        } else {
+          throw new Error('Server returned non-JSON response');
+        }
       } catch (err) {
         console.error('Failed to fetch topics:', err);
       } finally {
