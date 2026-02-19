@@ -13,22 +13,21 @@
     "framer-motion": "^12.34.0",
     "livekit-client": "^2.17.1",
     "lucide-react": "^0.564.0",
-    "next": "^16.1.6",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "next": "15.1.7",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
     "socket.io-client": "^4.8.3",
-    "styled-jsx": "^5.1.6",
     "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^25.2.3",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5.9.3"
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.13.4",
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "eslint": "^9.20.1",
+    "eslint-config-next": "15.1.7",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3"
   }
 }

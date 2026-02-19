@@ -10,6 +10,8 @@ CREATE TABLE users (
     avatar_style JSONB DEFAULT '{"style": "default"}',
     xp INTEGER DEFAULT 0,
     mmr INTEGER DEFAULT 1000,
+    wins INTEGER DEFAULT 0,
+    losses INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -45,6 +47,9 @@ CREATE TABLE matches (
     player_1_id UUID REFERENCES users(id),
     player_2_id UUID REFERENCES users(id),
     winner_id UUID REFERENCES users(id),
+    mode TEXT DEFAULT 'casual', -- casual, ai, ranked
+    difficulty TEXT, -- easy, medium, hard (for AI)
+    final_momentum INTEGER DEFAULT 50,
     replay_url TEXT,
     chat_log JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

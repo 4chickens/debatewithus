@@ -22,13 +22,21 @@ export const supabase = (supabaseUrl && supabaseKey)
  * Saves a match result to Supabase.
  * Gracefully skip if database is not configured.
  */
-export async function saveMatchResult(matchId: string, finalMomentum: number, transcripts: string[]) {
+export async function saveMatchResult(
+    matchId: string, 
+    finalMomentum: number, 
+    transcripts: string[], 
+    mode: string = 'casual',
+    difficulty?: string,
+    player1Id?: string,
+    player2Id?: string
+) {
     if (!supabase) {
         console.warn('[Supabase] Skipping saveMatchResult: Credentials missing.');
         return;
     }
 
-    const winner = finalMomentum > 50 ? 'RIGHT' : 'LEFT';
+    const winner_id = finalMomentum < 50 ? player1Id : (mode === 'ai' ? null : player2Id);
 
     try {
         const { error } = await supabase
@@ -37,13 +45,24 @@ export async function saveMatchResult(matchId: string, finalMomentum: number, tr
                 {
                     id: matchId,
                     final_momentum: finalMomentum,
-                    winner,
-                    transcript_count: transcripts.length,
+                    player_1_id: player1Id,
+                    player_2_id: player2Id,
+                    winner_id,
+                    mode,
+                    difficulty,
+                    chat_log: { transcripts },
                     created_at: new Date().toISOString()
                 }
             ]);
 
         if (error) console.error('[Supabase] Save error:', error);
+
+        // Update user stats if not AI
+        if (player1Id) {
+            const isWinner = finalMomentum < 50;
+            const { error: statsError } = await supabase.rpc(isWinner ? 'increment_wins' : 'increment_losses', { user_id: player1Id });
+            if (statsError) console.error('[Supabase] Stats update error:', statsError);
+        }
     } catch (err) {
         console.error('[Supabase] Critical error during save:', err);
     }

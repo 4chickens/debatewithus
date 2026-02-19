@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import { generateToken } from './services/livekit.js';
-import { analyzeDebateImpact } from './services/openai.js';
+import { analyzeDebateImpact, generateAIResponse } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
 import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, getPendingTopics, getAllTopics, getAllUsers, updateUserRole, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
 import { sendVerificationEmail } from './services/mail.js';
@@ -82,9 +82,12 @@ interface MatchState {
   rightPlayer?: { id: string, name: string };
   transcripts: string[];
   topic: { title: string, description: string };
+  mode: 'casual' | 'ai' | 'ranked';
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 const matches: Record<string, MatchState> = {};
+const rankedQueue: Array<{ socketId: string, userId: string, username: string, mmr: number }> = [];
 
 const PHASE_DURATIONS = {
   Lobby: 15,
@@ -110,7 +113,15 @@ const transitionPhase = async (matchId: string) => {
     match.timeLeft = PHASE_DURATIONS[match.phase];
 
     if (match.phase === 'Results') {
-      await saveMatchResult(matchId, match.momentum, match.transcripts);
+      await saveMatchResult(
+        matchId, 
+        match.momentum, 
+        match.transcripts, 
+        match.mode, 
+        match.difficulty, 
+        match.leftPlayer?.id, 
+        match.rightPlayer?.id
+      );
     }
 
     io.to(matchId).emit('phase_transition', { phase: match.phase, timeLeft: match.timeLeft });
@@ -126,6 +137,24 @@ setInterval(() => {
     if (match.phase === 'Results') return;
 
     match.timeLeft -= 1;
+
+    // AI Opponent Logic
+    if (match.mode === 'ai' && ['Opening', 'Crossfire', 'Closing'].includes(match.phase)) {
+      // AI responds every 10-15 seconds if it's "its turn" (simulated)
+      if (match.timeLeft % 12 === 0 && match.timeLeft > 0) {
+        const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium');
+        match.transcripts.push(`[AI]: ${aiResponse}`);
+        
+        const delta = await analyzeDebateImpact(aiResponse, match.phase);
+        match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+
+        io.to(matchId).emit('game_update', {
+          momentum: match.momentum,
+          lastDelta: delta,
+          transcript: `[AI]: ${aiResponse}`
+        });
+      }
+    }
 
     if (match.timeLeft <= 0) {
       await transitionPhase(matchId);
@@ -390,7 +419,8 @@ apiRouter.get('/admin/topics', authenticateToken as any, authorizeAdmin as any, 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('join_match', async (matchId: string) => {
+  socket.on('join_match', async (data: { matchId: string, mode?: 'casual' | 'ai' | 'ranked', difficulty?: 'easy' | 'medium' | 'hard' }) => {
+    const { matchId, mode = 'casual', difficulty = 'medium' } = typeof data === 'string' ? { matchId: data } : data;
     socket.join(matchId);
 
     if (!matches[matchId]) {
@@ -401,12 +431,45 @@ io.on('connection', (socket) => {
         phase: 'Lobby',
         timeLeft: PHASE_DURATIONS.Lobby,
         transcripts: [],
-        topic: { title: topic.title, description: topic.description }
+        topic: { title: topic.title, description: topic.description },
+        mode,
+        difficulty
       };
+      
+      if (mode === 'ai') {
+        matches[matchId].rightPlayer = { id: 'ai-bot', name: `AI Bot (${difficulty})` };
+      }
     }
 
-    console.log(`User ${socket.id} joined match ${matchId}`);
+    console.log(`User ${socket.id} joined ${mode} match ${matchId}`);
     socket.emit('game_init', matches[matchId]);
+  });
+
+  socket.on('join_ranked_queue', async (data: { userId: string, username: string }) => {
+    // In a real app, fetch MMR from DB. Using 1000 as default.
+    const user = await findUserByIdentifier(data.userId);
+    const mmr = user?.mmr || 1000;
+
+    // Simple Matchmaking: Find someone within 200 MMR
+    const opponentIndex = rankedQueue.findIndex(p => Math.abs(p.mmr - mmr) < 200);
+
+    if (opponentIndex > -1) {
+      const opponent = rankedQueue.splice(opponentIndex, 1)[0];
+      const matchId = `ranked-${Date.now()}`;
+      
+      // Notify both
+      io.to(socket.id).emit('match_found', { matchId, opponent: opponent.username });
+      io.to(opponent.socketId).emit('match_found', { matchId, opponent: data.username });
+    } else {
+      rankedQueue.push({ socketId: socket.id, userId: data.userId, username: data.username, mmr });
+      socket.emit('queue_joined');
+    }
+  });
+
+  socket.on('leave_ranked_queue', () => {
+    const idx = rankedQueue.findIndex(p => p.socketId === socket.id);
+    if (idx > -1) rankedQueue.splice(idx, 1);
+    socket.emit('queue_left');
   });
 
   // Handle Voice Transcripts

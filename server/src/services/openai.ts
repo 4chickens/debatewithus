@@ -46,3 +46,46 @@ export async function analyzeDebateImpact(text: string, phase: string): Promise<
         return 0;
     }
 }
+
+/**
+ * Generates a counter-argument from the AI opponent.
+ */
+export async function generateAIResponse(
+    topic: { title: string, description: string },
+    recentTranscripts: string[],
+    difficulty: 'easy' | 'medium' | 'hard'
+): Promise<string> {
+    if (!process.env.OPENAI_API_KEY) return "The silence of the machine is my only argument.";
+
+    const difficultyPrompts = {
+        easy: "logical but simple, sometimes making minor errors or using circular reasoning.",
+        medium: "coherent, logic-driven, and persuasive.",
+        hard: "highly aggressive, utilizing advanced rhetorical techniques, philosophy, and cutting logic."
+    };
+
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "system",
+                    content: `You are an expert debater competing in a real-time game. 
+          The topic is: "${topic.title} - ${topic.description}".
+          You are arguing for the RIGHT side (PRO or CON depending on context, but opposite to the human).
+          Your response should be ${difficultyPrompts[difficulty]}
+          Keep it concise (max 2 sentences) to maintain game pace.`
+                },
+                {
+                    role: "user",
+                    content: `Recent debate points: ${recentTranscripts.slice(-3).join(' | ')}. Respond with your counter-argument.`
+                }
+            ],
+            temperature: difficulty === 'easy' ? 0.9 : 0.7,
+        });
+
+        return response.choices[0].message.content?.trim() || "I await your next point.";
+    } catch (err) {
+        console.error('AI Response generation failed:', err);
+        return "System error: Cognitive processors offline.";
+    }
+}

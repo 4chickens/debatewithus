@@ -2,19 +2,23 @@
 
 import { motion } from 'framer-motion';
 import { ExternalLink, Users, Tag } from 'lucide-react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { Topic } from '@/types';
+import ModeSelectionModal from './ModeSelectionModal';
 
 export default function TopicCard({ topic }: { topic: Topic }) {
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const tags = topic.topic_tags?.map(tt => tt.tags.name) || [];
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ scale: 1.02 }}
-            className="group relative bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-neon-cyan/50 transition-all backdrop-blur-md"
-        >
+        <>
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ scale: 1.02 }}
+                onClick={() => setIsModalOpen(true)}
+                className="group relative bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-neon-cyan/50 transition-all backdrop-blur-md cursor-pointer"
+            >
             {/* Thumbnail */}
             <div className="aspect-video relative overflow-hidden bg-white/5">
                 {topic.thumbnail_url ? (
@@ -60,17 +64,21 @@ export default function TopicCard({ topic }: { topic: Topic }) {
                     <span className="text-[10px] font-mono text-white/20 uppercase tracking-widest">
                         By {topic.created_by?.username || 'System'}
                     </span>
-                    <Link
-                        href={`/arena/${topic.id}`}
-                        className="flex items-center gap-1 text-xs font-bold text-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
+                    <div className="flex items-center gap-1 text-xs font-bold text-neon-cyan opacity-0 group-hover:opacity-100 transition-opacity">
                         ENTER ARENA <ExternalLink size={14} />
-                    </Link>
+                    </div>
                 </div>
             </div>
 
             {/* Glass decoration */}
             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         </motion.div>
+
+        <ModeSelectionModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+            topicId={topic.id} 
+        />
+        </>
     );
 }

@@ -7,15 +7,20 @@ import { MomentumMeter } from '@/components/MomentumMeter';
 import { AvatarVisualizer } from '@/components/AvatarVisualizer';
 import { Timer, Zap, Mic, MicOff, Home } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { API_URL } from '@/config';
 
 export default function ArenaPage() {
     const { matchId } = useParams();
+    const searchParams = useSearchParams();
+    const mode = searchParams.get('mode') || 'casual';
+    const difficulty = searchParams.get('difficulty') || 'medium';
+
     const { momentum, player1, player2, phase, timeLeft, setMomentum, setTimeLeft, updateVolume, setPhase } = useGameStore();
     const [isMuted, setIsMuted] = useState(false);
     const [isShaking, setIsShaking] = useState(false);
     const [transcript, setTranscript] = useState('');
+    const [lastDelta, setLastDelta] = useState<number | null>(null);
     const [topic, setTopic] = useState({ title: 'LOADING TOPIC...', description: '' });
     const socketRef = useRef<Socket | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -28,7 +33,7 @@ export default function ArenaPage() {
 
         socket.on('connect', () => {
             console.log('Connected to game engine');
-            socket.emit('join_match', matchId);
+            socket.emit('join_match', { matchId, mode, difficulty });
         });
 
         socket.on('game_init', (data: { momentum: number, phase: string, topic: any }) => {
@@ -40,7 +45,12 @@ export default function ArenaPage() {
         socket.on('game_update', (data: { momentum: number, transcript?: string, lastDelta?: number, phase?: string, timeLeft?: number, topic?: any }) => {
             if (data.momentum !== undefined) setMomentum(data.momentum);
             if (data.transcript) setTranscript(data.transcript);
-            if (data.lastDelta && Math.abs(data.lastDelta) > 5) triggerShake();
+            if (data.lastDelta !== undefined) {
+                setLastDelta(data.lastDelta);
+                if (Math.abs(data.lastDelta) > 5) triggerShake();
+                // Clear delta after 3s
+                setTimeout(() => setLastDelta(null), 3000);
+            }
             if (data.phase) setPhase(data.phase as any);
             if (data.timeLeft !== undefined) setTimeLeft(data.timeLeft);
             if (data.topic) setTopic(data.topic);
@@ -86,7 +96,7 @@ export default function ArenaPage() {
                         const volume = dataArray.reduce((p, c) => p + c, 0) / dataArray.length / 255;
 
                         socketRef.current.emit('audio_chunk', {
-                            matchId: 'arena-match-1',
+                            matchId: matchId,
                             chunk: event.data,
                             volume: volume
                         });
@@ -139,7 +149,14 @@ export default function ArenaPage() {
             {/* Header Info */}
             <div className="z-20 w-full max-w-5xl flex justify-between items-start">
                 <div className="flex flex-col">
-                    <span className="text-neon-cyan text-[10px] font-mono tracking-widest uppercase">Match ID: #7F22A</span>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-neon-cyan text-[10px] font-mono tracking-widest uppercase">Match ID: #{matchId?.toString().slice(-5)}</span>
+                        {mode === 'ai' && (
+                            <span className="px-2 py-0.5 bg-neon-purple/20 border border-neon-purple/50 rounded text-[8px] font-mono text-neon-purple uppercase font-bold animate-pulse">
+                                VS AI // {difficulty}
+                            </span>
+                        )}
+                    </div>
                     <h1 className="text-3xl font-black italic tracking-tighter glitch-text" data-text="THE ARENA">THE ARENA</h1>
                 </div>
 
@@ -189,7 +206,18 @@ export default function ArenaPage() {
                     </div>
 
                     <div className="flex flex-col items-center gap-2">
-                        <Zap className="text-yellow-400 animate-pulse" />
+                        <div className="flex items-center gap-2">
+                            <Zap className={`text-yellow-400 ${lastDelta !== null ? 'animate-bounce scale-150' : 'animate-pulse'}`} />
+                            {lastDelta !== null && (
+                                <motion.span
+                                    initial={{ opacity: 0, scale: 0.5 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className={`text-lg font-black font-mono ${lastDelta > 0 ? 'text-neon-cyan' : 'text-neon-pink'}`}
+                                >
+                                    {lastDelta > 0 ? `+${lastDelta}` : lastDelta}
+                                </motion.span>
+                            )}
+                        </div>
                         <span className="text-[10px] font-bold tracking-[0.2em] text-white/60">MOMENTUM_BALANCE</span>
                     </div>
                     <MomentumMeter />
@@ -197,11 +225,15 @@ export default function ArenaPage() {
                     {/* Live Transcript Bubble */}
                     {transcript && (
                         <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-md max-w-md text-center"
+                            key={transcript}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className={`p-4 rounded-xl backdrop-blur-md max-w-md text-center border ${transcript.startsWith('[AI]')
+                                    ? 'bg-neon-purple/10 border-neon-purple/50 shadow-[0_0_20px_rgba(188,19,254,0.2)]'
+                                    : 'bg-white/5 border-white/10'
+                                }`}
                         >
-                            <p className="text-xs font-mono text-cyan-400 leading-relaxed">
+                            <p className={`text-xs font-mono leading-relaxed ${transcript.startsWith('[AI]') ? 'text-neon-purple' : 'text-cyan-400'}`}>
                                 {transcript}
                             </p>
                         </motion.div>
