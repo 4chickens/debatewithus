@@ -3,24 +3,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Check, X, Shield, Clock, AlertCircle, Loader2, Users, FileText, Grid, LogOut } from 'lucide-react';
+import { Check, X, Shield, Clock, AlertCircle, Loader2, Users, FileText, Grid, LogOut, Home, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/config';
 import UserManagement from '@/components/admin/UserManagement';
 import TopicManagement from '@/components/admin/TopicManagement';
-
-interface Topic {
-    id: string;
-    title: string;
-    description: string;
-    status: string;
-    created_at: string;
-    topic_tags?: Array<{
-        tags: {
-            name: string;
-        };
-    }>;
-}
+import { Topic } from '@/types';
 
 export default function AdminPage() {
     const router = useRouter();
@@ -99,6 +87,14 @@ export default function AdminPage() {
 
                 <nav className="flex flex-col gap-2">
                     <button
+                        onClick={() => router.push('/')}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left text-white/40 hover:bg-white/5 hover:text-neon-cyan mb-4"
+                    >
+                        <ArrowLeft size={18} />
+                        <span className="text-xs font-mono uppercase tracking-widest font-bold">Back to Arena</span>
+                    </button>
+
+                    <button
                         onClick={() => setActiveTab('dashboard')}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'dashboard' ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50 shadow-[0_0_15px_rgba(0,243,255,0.2)]' : 'text-white/40 hover:bg-white/5'
                             }`}
@@ -125,12 +121,21 @@ export default function AdminPage() {
                 </nav>
 
                 <div className="mt-auto pt-6 border-t border-white/10 space-y-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-purple to-neon-pink" />
-                        <div className="flex flex-col">
-                            <span className="text-xs font-bold text-white uppercase">{user.username}</span>
-                            <span className="text-[10px] text-white/40 uppercase">Super Admin</span>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-purple to-neon-pink" />
+                            <div className="flex flex-col">
+                                <span className="text-xs font-bold text-white uppercase">{user.username}</span>
+                                <span className="text-[10px] text-white/40 uppercase">Super Admin</span>
+                            </div>
                         </div>
+                        <button
+                            onClick={logout}
+                            className="p-2 bg-white/5 hover:bg-red-500/20 border border-white/10 rounded-lg text-white/40 hover:text-red-500 transition-all"
+                            title="Sign Out"
+                        >
+                            <LogOut size={16} />
+                        </button>
                     </div>
                 </div>
             </aside>
