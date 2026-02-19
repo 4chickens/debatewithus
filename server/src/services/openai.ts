@@ -53,7 +53,8 @@ export async function analyzeDebateImpact(text: string, phase: string): Promise<
 export async function generateAIResponse(
     topic: { title: string, description: string },
     recentTranscripts: string[],
-    difficulty: 'easy' | 'medium' | 'hard'
+    difficulty: 'easy' | 'medium' | 'hard',
+    phase: string
 ): Promise<string> {
     if (!process.env.OPENAI_API_KEY) return "The silence of the machine is my only argument.";
 
@@ -63,24 +64,37 @@ export async function generateAIResponse(
         hard: "highly aggressive, utilizing advanced rhetorical techniques, philosophy, and cutting logic."
     };
 
+    const phaseInstructions: Record<string, string> = {
+        Opening_P2: "Provide a strong opening statement supporting your position. Establish your core arguments.",
+        Rebuttal_P2: "Directly address and dismantle the last points made by the opponent. Use logic to invalidate their claims.",
+        Crossfire: "Engage in quick, sharp exchanges. Keep it punchy and defensive/offensive as needed.",
+        Closing_P2: "Summarize your strongest points and provide a powerful concluding statement on why you won."
+    };
+
+    const instruction = phaseInstructions[phase] || "Respond to the debate.";
+
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "system",
-                    content: `You are an expert debater competing in a real-time game. 
+                    content: `You are an expert debater (AI) competing in a real-time game. 
           The topic is: "${topic.title} - ${topic.description}".
-          You are arguing for the RIGHT side (PRO or CON depending on context, but opposite to the human).
-          Your response should be ${difficultyPrompts[difficulty]}
-          Keep it concise (max 2 sentences) to maintain game pace.`
+          You are Player 2 (Right Side), arguing against Player 1 (Human).
+          
+          CURRENT PHASE: ${phase}.
+          TASK: ${instruction}
+          
+          STYLE: Your response should be ${difficultyPrompts[difficulty]}
+          Keep it concise (max 3 sentences) to maintain game pace.`
                 },
                 {
                     role: "user",
-                    content: `Recent debate points: ${recentTranscripts.slice(-3).join(' | ')}. Respond with your counter-argument.`
+                    content: `Recent debate history: ${recentTranscripts.slice(-5).join(' | ')}. Provide your response.`
                 }
             ],
-            temperature: difficulty === 'easy' ? 0.9 : 0.7,
+            temperature: difficulty === 'easy' ? 0.9 : 0.6,
         });
 
         return response.choices[0].message.content?.trim() || "I await your next point.";

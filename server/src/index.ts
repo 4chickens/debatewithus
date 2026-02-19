@@ -76,7 +76,7 @@ const io = new Server(httpServer, {
 interface MatchState {
   id: string;
   momentum: number;
-  phase: 'Lobby' | 'Opening' | 'Crossfire' | 'Closing' | 'SuddenDeath' | 'Results';
+  phase: 'Lobby' | 'Opening_P1' | 'Opening_P2' | 'Rebuttal_P1' | 'Rebuttal_P2' | 'Crossfire' | 'Closing_P1' | 'Closing_P2' | 'Results';
   timeLeft: number;
   leftPlayer?: { id: string, name: string };
   rightPlayer?: { id: string, name: string };
@@ -89,12 +89,15 @@ interface MatchState {
 const matches: Record<string, MatchState> = {};
 const rankedQueue: Array<{ socketId: string, userId: string, username: string, mmr: number }> = [];
 
-const PHASE_DURATIONS = {
+const PHASE_DURATIONS: Record<MatchState['phase'], number> = {
   Lobby: 15,
-  Opening: 60,
-  Crossfire: 90,
-  Closing: 60,
-  SuddenDeath: 30,
+  Opening_P1: 45,
+  Opening_P2: 45,
+  Rebuttal_P1: 30,
+  Rebuttal_P2: 30,
+  Crossfire: 60,
+  Closing_P1: 30,
+  Closing_P2: 30,
   Results: 0
 };
 
@@ -105,7 +108,14 @@ const transitionPhase = async (matchId: string) => {
   const match = matches[matchId];
   if (!match) return;
 
-  const phases: MatchState['phase'][] = ['Lobby', 'Opening', 'Crossfire', 'Closing', 'Results'];
+  const phases: MatchState['phase'][] = [
+    'Lobby', 
+    'Opening_P1', 'Opening_P2', 
+    'Rebuttal_P1', 'Rebuttal_P2', 
+    'Crossfire', 
+    'Closing_P1', 'Closing_P2', 
+    'Results'
+  ];
   const currentIndex = phases.indexOf(match.phase);
 
   if (currentIndex < phases.length - 1) {
@@ -139,10 +149,28 @@ setInterval(() => {
     match.timeLeft -= 1;
 
     // AI Opponent Logic
-    if (match.mode === 'ai' && ['Opening', 'Crossfire', 'Closing'].includes(match.phase)) {
-      // AI responds every 10-15 seconds if it's "its turn" (simulated)
-      if (match.timeLeft % 12 === 0 && match.timeLeft > 0) {
-        const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium');
+    if (match.mode === 'ai') {
+      const isAITurn = ['Opening_P2', 'Rebuttal_P2', 'Closing_P2'].includes(match.phase);
+      const isCrossfire = match.phase === 'Crossfire';
+
+      // On turn-based phases: AI responds once at the start (at timeLeft - 2s for realism)
+      if (isAITurn && match.timeLeft === PHASE_DURATIONS[match.phase] - 2) {
+        const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium', match.phase);
+        match.transcripts.push(`[AI]: ${aiResponse}`);
+        
+        const delta = await analyzeDebateImpact(aiResponse, match.phase);
+        match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+
+        io.to(matchId).emit('game_update', {
+          momentum: match.momentum,
+          lastDelta: delta,
+          transcript: `[AI]: ${aiResponse}`
+        });
+      }
+
+      // During Crossfire: AI responds periodically (every 15s)
+      if (isCrossfire && match.timeLeft > 0 && match.timeLeft % 15 === 0) {
+        const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium', match.phase);
         match.transcripts.push(`[AI]: ${aiResponse}`);
         
         const delta = await analyzeDebateImpact(aiResponse, match.phase);

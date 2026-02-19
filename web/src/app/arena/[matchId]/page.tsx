@@ -21,6 +21,7 @@ export default function ArenaPage() {
     const [isShaking, setIsShaking] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [lastDelta, setLastDelta] = useState<number | null>(null);
+    const [isAiTyping, setIsAiTyping] = useState(false);
     const [topic, setTopic] = useState({ title: 'LOADING TOPIC...', description: '' });
     const socketRef = useRef<Socket | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -44,7 +45,19 @@ export default function ArenaPage() {
 
         socket.on('game_update', (data: { momentum: number, transcript?: string, lastDelta?: number, phase?: string, timeLeft?: number, topic?: any }) => {
             if (data.momentum !== undefined) setMomentum(data.momentum);
-            if (data.transcript) setTranscript(data.transcript);
+            
+            if (data.transcript) {
+                if (data.transcript.startsWith('[AI]')) {
+                    setIsAiTyping(true);
+                    setTimeout(() => {
+                        setTranscript(data.transcript!);
+                        setIsAiTyping(false);
+                    }, 2000); // Simulate processing time
+                } else {
+                    setTranscript(data.transcript);
+                }
+            }
+
             if (data.lastDelta !== undefined) {
                 setLastDelta(data.lastDelta);
                 if (Math.abs(data.lastDelta) > 5) triggerShake();
@@ -69,6 +82,15 @@ export default function ArenaPage() {
 
     // 2. Real-time Audio Streaming & Analysis
     useEffect(() => {
+        const isMyTurn = phase.includes('P1') || phase === 'Crossfire';
+        
+        // Auto-mute if it's not our turn (only in structured phases)
+        if (!isMyTurn && phase !== 'Lobby' && phase !== 'Results') {
+            setIsMuted(true);
+        } else if (isMyTurn) {
+            setIsMuted(false);
+        }
+
         if (isMuted || phase === 'Lobby' || phase === 'Results') {
             mediaRecorderRef.current?.stop();
             return;
@@ -140,6 +162,21 @@ export default function ArenaPage() {
         setTimeout(() => setIsShaking(false), 500);
     };
 
+    const getPhaseLabel = (p: string) => {
+        const labels: Record<string, string> = {
+            Lobby: 'Waiting for Ready',
+            Opening_P1: 'P1 Opening Statement',
+            Opening_P2: 'P2 Opening Statement',
+            Rebuttal_P1: 'P1 Rebuttal',
+            Rebuttal_P2: 'P2 Rebuttal',
+            Crossfire: 'Direct Crossfire',
+            Closing_P1: 'P1 Closing Argument',
+            Closing_P2: 'P2 Closing Argument',
+            Results: 'Match Results'
+        };
+        return labels[p] || p;
+    };
+
     return (
         <main className="min-h-screen bg-black text-white relative flex flex-col items-center justify-between p-8 overflow-hidden">
             {/* Background Effects */}
@@ -166,8 +203,8 @@ export default function ArenaPage() {
                             <Timer className="text-neon-pink w-4 h-4 animate-pulse" />
                             <span className="font-mono text-2xl font-bold tracking-tighter">{timeLeft}s</span>
                         </div>
-                        <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                            {phase} {phase === 'Lobby' ? 'COUNTDOWN' : 'PHASE'}
+                        <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest text-center">
+                            {getPhaseLabel(phase)}
                         </div>
                     </div>
                 </div>
@@ -188,13 +225,23 @@ export default function ArenaPage() {
                 </div>
             </div>
 
-            {/* Combat Area */}
             <motion.div
                 className="z-20 w-full max-w-6xl flex justify-around items-center gap-8 py-12"
                 animate={isShaking ? { x: [-10, 10, -5, 5, 0] } : {}}
                 transition={{ duration: 0.4 }}
             >
-                <AvatarVisualizer player={player1} side="left" />
+                <div className="relative">
+                    <AvatarVisualizer player={player1} side="left" />
+                    {(phase.includes('P1') || phase === 'Crossfire') && phase !== 'Results' && phase !== 'Lobby' && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-neon-cyan text-black text-[8px] font-black uppercase tracking-widest rounded-full shadow-[0_0_15px_rgba(0,243,255,0.5)]"
+                        >
+                            Speaking
+                        </motion.div>
+                    )}
+                </div>
 
                 <div className="flex-1 flex flex-col items-center gap-12">
                     {/* Topic Display */}
@@ -223,24 +270,54 @@ export default function ArenaPage() {
                     <MomentumMeter />
 
                     {/* Live Transcript Bubble */}
-                    {transcript && (
-                        <motion.div
-                            key={transcript}
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className={`p-4 rounded-xl backdrop-blur-md max-w-md text-center border ${transcript.startsWith('[AI]')
-                                    ? 'bg-neon-purple/10 border-neon-purple/50 shadow-[0_0_20px_rgba(188,19,254,0.2)]'
-                                    : 'bg-white/5 border-white/10'
-                                }`}
+                    <div className="min-h-[80px] flex flex-col items-center justify-center">
+                        <AnimatePresence mode="wait">
+                            {isAiTyping ? (
+                                <motion.div
+                                    key="typing"
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -5 }}
+                                    className="flex items-center gap-3 px-4 py-2 bg-neon-purple/10 border border-neon-purple/30 rounded-full"
+                                >
+                                    <div className="flex gap-1">
+                                        <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1.5 h-1.5 bg-neon-purple rounded-full" />
+                                        <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1.5 h-1.5 bg-neon-purple rounded-full" />
+                                        <motion.div animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1.5 h-1.5 bg-neon-purple rounded-full" />
+                                    </div>
+                                    <span className="text-[10px] font-mono text-neon-purple uppercase tracking-widest font-bold">AI IS ANALYZING...</span>
+                                </motion.div>
+                            ) : transcript ? (
+                                <motion.div
+                                    key={transcript}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className={`p-4 rounded-xl backdrop-blur-md max-w-md text-center border ${transcript.startsWith('[AI]')
+                                            ? 'bg-neon-purple/10 border-neon-purple/50 shadow-[0_0_20px_rgba(188,19,254,0.2)]'
+                                            : 'bg-white/5 border-white/10'
+                                        }`}
+                                >
+                                    <p className={`text-xs font-mono leading-relaxed ${transcript.startsWith('[AI]') ? 'text-neon-purple' : 'text-cyan-400'}`}>
+                                        {transcript}
+                                    </p>
+                                </motion.div>
+                            ) : null}
+                        </AnimatePresence>
+                    </div>
+                </div>
+
+                <div className="relative">
+                    <AvatarVisualizer player={player2} side="right" />
+                    {(phase.includes('P2') || phase === 'Crossfire') && phase !== 'Results' && phase !== 'Lobby' && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-3 py-1 bg-neon-pink text-black text-[8px] font-black uppercase tracking-widest rounded-full shadow-[0_0_15px_rgba(255,0,127,0.5)]"
                         >
-                            <p className={`text-xs font-mono leading-relaxed ${transcript.startsWith('[AI]') ? 'text-neon-purple' : 'text-cyan-400'}`}>
-                                {transcript}
-                            </p>
+                            Speaking
                         </motion.div>
                     )}
                 </div>
-
-                <AvatarVisualizer player={player2} side="right" />
             </motion.div>
 
             {/* UI Dashboard */}

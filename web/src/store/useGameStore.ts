@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type MatchPhase = 'Lobby' | 'Opening' | 'Crossfire' | 'Closing' | 'SuddenDeath' | 'Results';
+export type MatchPhase = 'Lobby' | 'Opening_P1' | 'Opening_P2' | 'Rebuttal_P1' | 'Rebuttal_P2' | 'Crossfire' | 'Closing_P1' | 'Closing_P2' | 'Results';
 
 interface Player {
   id: string;
