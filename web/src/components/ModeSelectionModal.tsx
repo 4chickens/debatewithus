@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Users, Trophy, X, ChevronRight } from 'lucide-react';
+import { Bot, Users, Trophy, X, ChevronRight, Mic, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -14,6 +14,7 @@ interface ModeSelectionModalProps {
 export default function ModeSelectionModal({ isOpen, onClose, topicId }: ModeSelectionModalProps) {
     const router = useRouter();
     const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+    const [inputMode, setInputMode] = useState<'voice' | 'chat'>('voice');
 
     const modeConfigs = {
         ai: {
@@ -44,19 +45,19 @@ export default function ModeSelectionModal({ isOpen, onClose, topicId }: ModeSel
             id: 'ai' as const,
             name: 'VS AI BOT',
             description: 'Practice your arguments against our advanced linguistic AI.',
-            action: () => router.push(`/arena/${topicId}?mode=ai&difficulty=${aiDifficulty}`)
+            action: () => router.push(`/arena/${topicId}?mode=ai&difficulty=${aiDifficulty}&inputMode=${inputMode}`)
         },
         {
             id: 'casual' as const,
             name: 'CASUAL BATTLE',
             description: 'Enter the arena and wait for a human opponent.',
-            action: () => router.push(`/arena/${topicId}?mode=casual`)
+            action: () => router.push(`/arena/${topicId}?mode=casual&inputMode=${inputMode}`)
         },
         {
             id: 'ranked' as const,
             name: 'RANKED ARENA',
             description: 'Compete for MMR and climb the global leaderboards.',
-            action: () => router.push(`/arena/${topicId}?mode=ranked`)
+            action: () => router.push(`/arena/${topicId}?mode=ranked&inputMode=${inputMode}`)
         }
     ];
 
@@ -89,6 +90,33 @@ export default function ModeSelectionModal({ isOpen, onClose, topicId }: ModeSel
                                 <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-white/40 hover:text-white">
                                     <X size={24} />
                                 </button>
+                            </div>
+
+                            {/* Input Mode Selector */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-mono text-white/20 uppercase tracking-[0.2em] ml-1">Transmission Format</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button 
+                                        onClick={() => setInputMode('voice')}
+                                        className={`flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all ${inputMode === 'voice' ? 'bg-neon-cyan/10 border-neon-cyan text-neon-cyan shadow-[0_0_20px_rgba(0,243,255,0.2)]' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                                    >
+                                        <Mic size={20} />
+                                        <div className="text-left">
+                                            <p className="text-xs font-bold uppercase">Neural Voice</p>
+                                            <p className="text-[8px] font-mono uppercase opacity-50">Real-time Stream</p>
+                                        </div>
+                                    </button>
+                                    <button 
+                                        onClick={() => setInputMode('chat')}
+                                        className={`flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all ${inputMode === 'chat' ? 'bg-neon-pink/10 border-neon-pink text-neon-pink shadow-[0_0_20px_rgba(255,0,127,0.2)]' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                                    >
+                                        <MessageSquare size={20} />
+                                        <div className="text-left">
+                                            <p className="text-xs font-bold uppercase">Tactical Chat</p>
+                                            <p className="text-[8px] font-mono uppercase opacity-50">Keyboard Combat</p>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4">

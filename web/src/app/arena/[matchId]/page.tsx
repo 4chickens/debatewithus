@@ -22,9 +22,11 @@ export default function ArenaPage() {
     const [transcript, setTranscript] = useState('');
     const [lastDelta, setLastDelta] = useState<number | null>(null);
     const [isAiTyping, setIsAiTyping] = useState(false);
+    const [message, setMessage] = useState('');
     const [topic, setTopic] = useState({ title: 'LOADING TOPIC...', description: '' });
     const socketRef = useRef<Socket | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
 
     // 1. Initialize Socket Connection
@@ -34,7 +36,7 @@ export default function ArenaPage() {
 
         socket.on('connect', () => {
             console.log('Connected to game engine');
-            socket.emit('join_match', { matchId, mode, difficulty });
+            socket.emit('join_match', { matchId, mode, difficulty, inputMode });
         });
 
         socket.on('game_init', (data: { momentum: number, phase: string, topic: any }) => {
@@ -47,13 +49,15 @@ export default function ArenaPage() {
             if (data.momentum !== undefined) setMomentum(data.momentum);
             
             if (data.transcript) {
+                // If it's AI, show typing simulation
                 if (data.transcript.startsWith('[AI]')) {
                     setIsAiTyping(true);
                     setTimeout(() => {
                         setTranscript(data.transcript!);
                         setIsAiTyping(false);
-                    }, 2000); // Simulate processing time
+                    }, 2000);
                 } else {
+                    // For human messages (voice or chat), show immediately
                     setTranscript(data.transcript);
                 }
             }
@@ -61,7 +65,6 @@ export default function ArenaPage() {
             if (data.lastDelta !== undefined) {
                 setLastDelta(data.lastDelta);
                 if (Math.abs(data.lastDelta) > 5) triggerShake();
-                // Clear delta after 3s
                 setTimeout(() => setLastDelta(null), 3000);
             }
             if (data.phase) setPhase(data.phase as any);
@@ -78,13 +81,14 @@ export default function ArenaPage() {
         return () => {
             socket.disconnect();
         };
-    }, [matchId, setMomentum, setPhase, setTimeLeft]);
+    }, [matchId, mode, difficulty, inputMode, setMomentum, setPhase, setTimeLeft]);
 
-    // 2. Real-time Audio Streaming & Analysis
+    // 2. Real-time Audio Streaming & Analysis (Only if in voice mode)
     useEffect(() => {
+        if (inputMode !== 'voice') return;
+
         const isMyTurn = phase.includes('P1') || phase === 'Crossfire';
         
-        // Auto-mute if it's not our turn (only in structured phases)
         if (!isMyTurn && phase !== 'Lobby' && phase !== 'Results') {
             setIsMuted(true);
         } else if (isMyTurn) {
@@ -99,8 +103,6 @@ export default function ArenaPage() {
         async function startStreaming() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                // Audio Context for Volume Analysis
                 const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
                 const analyser = audioContext.createAnalyser();
                 const source = audioContext.createMediaStreamSource(stream);
@@ -113,7 +115,6 @@ export default function ArenaPage() {
 
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0 && socketRef.current?.connected) {
-                        // Get current volume
                         analyser.getByteFrequencyData(dataArray);
                         const volume = dataArray.reduce((p, c) => p + c, 0) / dataArray.length / 255;
 
@@ -123,12 +124,11 @@ export default function ArenaPage() {
                             volume: volume
                         });
 
-                        // Update local UI state for visualizer
                         updateVolume(1, volume);
                     }
                 };
 
-                mediaRecorder.start(100); // Faster chunks for better reactivity
+                mediaRecorder.start(100);
             } catch (err) {
                 console.error('Audio capture failed:', err);
             }
@@ -139,7 +139,19 @@ export default function ArenaPage() {
         return () => {
             mediaRecorderRef.current?.stop();
         };
-    }, [isMuted, updateVolume]);
+    }, [isMuted, updateVolume, inputMode, phase, matchId]);
+
+    const handleSendMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!message.trim() || !socketRef.current) return;
+
+        socketRef.current.emit('chat_message', {
+            matchId: matchId,
+            text: message
+        });
+        
+        setMessage('');
+    };
 
     // 2. Mock Game Timer
     useEffect(() => {
@@ -188,6 +200,9 @@ export default function ArenaPage() {
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-neon-cyan text-[10px] font-mono tracking-widest uppercase">Match ID: #{matchId?.toString().slice(-5)}</span>
+                        <span className={`px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[8px] font-mono uppercase font-bold ${inputMode === 'voice' ? 'text-neon-cyan' : 'text-neon-pink'}`}>
+                            {inputMode === 'voice' ? 'NEURAL_VOICE' : 'TACTICAL_CHAT'}
+                        </span>
                         {mode === 'ai' && (
                             <span className="px-2 py-0.5 bg-neon-purple/20 border border-neon-purple/50 rounded text-[8px] font-mono text-neon-purple uppercase font-bold animate-pulse">
                                 VS AI // {difficulty}
@@ -322,22 +337,55 @@ export default function ArenaPage() {
 
             {/* UI Dashboard */}
             <div className="z-20 w-full max-w-xl bg-white/5 border border-white/10 p-6 rounded-2xl backdrop-blur-xl flex flex-col gap-6">
-                <div className="space-y-4">
-                    <div className="flex justify-between items-end">
-                        <label className="text-xs font-mono text-white/60 uppercase tracking-widest">
-                            Real-time Sync (Socket.io)
-                        </label>
-                        <span className="text-neon-cyan font-mono font-bold">{momentum}%</span>
+                {inputMode === 'chat' ? (
+                    <form onSubmit={handleSendMessage} className="space-y-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-[10px] font-mono text-neon-cyan uppercase tracking-[0.2em]">
+                                { (phase.includes('P1') || phase === 'Crossfire') ? 'Tactical Input Active' : 'Waiting for Turn' }
+                            </label>
+                            { (phase.includes('P1') || phase === 'Crossfire') && (
+                                <span className="flex gap-1">
+                                    <span className="w-1 h-1 bg-neon-cyan rounded-full animate-ping" />
+                                    <span className="text-[8px] font-mono text-neon-cyan animate-pulse">READY</span>
+                                </span>
+                            )}
+                        </div>
+                        <div className="relative group">
+                            <input 
+                                type="text"
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                disabled={!(phase.includes('P1') || phase === 'Crossfire')}
+                                placeholder={(phase.includes('P1') || phase === 'Crossfire') ? "Type your argument..." : "Systems locked during opponent turn"}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl py-4 pl-6 pr-16 focus:outline-none focus:border-neon-cyan/50 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                            <button 
+                                type="submit"
+                                disabled={!message.trim() || !(phase.includes('P1') || phase === 'Crossfire')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-neon-cyan text-black rounded-lg hover:scale-105 active:scale-95 transition-all disabled:opacity-0 disabled:scale-90"
+                            >
+                                <Send size={18} />
+                            </button>
+                        </div>
+                    </form>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-end">
+                            <label className="text-xs font-mono text-white/60 uppercase tracking-widest">
+                                Neural Audio Feed
+                            </label>
+                            <span className="text-neon-cyan font-mono font-bold">{momentum}%</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex-1 h-1.5 bg-gray-800 rounded-lg overflow-hidden relative shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+                                <motion.div 
+                                    className="absolute top-0 left-0 h-full bg-neon-cyan shadow-[0_0_10px_var(--neon-cyan)]"
+                                    animate={{ width: `${momentum}%` }}
+                                />
+                            </div>
+                        </div>
                     </div>
-                    <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={momentum}
-                        onChange={(e) => handleMomentumChange(parseInt(e.target.value))}
-                        className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-neon-cyan shadow-[0_0_10px_var(--neon-cyan)]"
-                    />
-                </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                     <button
@@ -347,10 +395,10 @@ export default function ArenaPage() {
                         Impact Shockwave
                     </button>
                     <button
-                        onClick={() => updateVolume(1, Math.random() * 0.8 + 0.2)}
-                        className="py-3 px-4 rounded-lg bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan text-[10px] font-black hover:bg-neon-cyan/30 transition-all uppercase tracking-widest shadow-lg active:scale-95"
+                        onClick={() => router.push('/')}
+                        className="py-3 px-4 rounded-lg bg-white/5 border border-white/10 text-white/40 text-[10px] font-black hover:bg-white/10 transition-all uppercase tracking-widest shadow-lg active:scale-95 flex items-center justify-center gap-2"
                     >
-                        P1 Voice Burst
+                        <Home size={14} /> Exit Arena
                     </button>
                 </div>
             </div>

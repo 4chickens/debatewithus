@@ -19,6 +19,33 @@ export const supabase = (supabaseUrl && supabaseKey)
     : null;
 
 /**
+ * Saves a granular debate point to the database.
+ */
+export async function saveMatchMessage(
+    matchId: string,
+    userId: string | null,
+    content: string,
+    phase: string,
+    momentumDelta: number
+) {
+    if (!supabase) return;
+
+    try {
+        await supabase
+            .from('match_messages')
+            .insert([{
+                match_id: matchId,
+                user_id: userId,
+                content,
+                phase,
+                momentum_delta: momentumDelta
+            }]);
+    } catch (err) {
+        console.error('[Supabase] Error saving message:', err);
+    }
+}
+
+/**
  * Saves a match result to Supabase.
  * Gracefully skip if database is not configured.
  */
@@ -29,7 +56,8 @@ export async function saveMatchResult(
     mode: string = 'casual',
     difficulty?: string,
     player1Id?: string,
-    player2Id?: string
+    player2Id?: string,
+    inputMode: string = 'voice'
 ) {
     if (!supabase) {
         console.warn('[Supabase] Skipping saveMatchResult: Credentials missing.');
@@ -39,6 +67,7 @@ export async function saveMatchResult(
     const winner_id = finalMomentum < 50 ? player1Id : (mode === 'ai' ? null : player2Id);
 
     try {
+        // 1. Create the Match Record
         const { error } = await supabase
             .from('matches')
             .insert([
@@ -50,18 +79,38 @@ export async function saveMatchResult(
                     winner_id,
                     mode,
                     difficulty,
-                    chat_log: { transcripts },
+                    input_mode: inputMode,
                     created_at: new Date().toISOString()
                 }
             ]);
 
-        if (error) console.error('[Supabase] Save error:', error);
+        if (error) {
+            console.error('[Supabase] Save error:', error);
+            return;
+        }
 
-        // Update user stats if not AI
+        // 2. Update user stats & awards if not AI
         if (player1Id) {
             const isWinner = finalMomentum < 50;
-            const { error: statsError } = await supabase.rpc(isWinner ? 'increment_wins' : 'increment_losses', { user_id: player1Id });
-            if (statsError) console.error('[Supabase] Stats update error:', statsError);
+            // Award XP: 100 for win, 25 for participation
+            const xpReward = isWinner ? 100 : 25;
+            
+            await supabase.rpc('process_match_completion', { 
+                target_user_id: player1Id, 
+                is_win: isWinner,
+                xp_gain: xpReward
+            });
+        }
+
+        if (player2Id && mode !== 'ai') {
+            const isWinner = finalMomentum >= 50;
+            const xpReward = isWinner ? 100 : 25;
+            
+            await supabase.rpc('process_match_completion', { 
+                target_user_id: player2Id, 
+                is_win: isWinner,
+                xp_gain: xpReward
+            });
         }
     } catch (err) {
         console.error('[Supabase] Critical error during save:', err);

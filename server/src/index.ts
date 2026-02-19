@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact, generateAIResponse } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, getPendingTopics, getAllTopics, getAllUsers, updateUserRole, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
+import { saveMatchResult, saveMatchMessage, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, getPendingTopics, getAllTopics, getAllUsers, updateUserRole, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
 import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
@@ -84,10 +84,11 @@ interface MatchState {
   topic: { title: string, description: string };
   mode: 'casual' | 'ai' | 'ranked';
   difficulty?: 'easy' | 'medium' | 'hard';
+  inputMode: 'voice' | 'chat';
 }
 
 const matches: Record<string, MatchState> = {};
-const rankedQueue: Array<{ socketId: string, userId: string, username: string, mmr: number }> = [];
+const rankedQueue: Array<{ socketId: string, userId: string, username: string, mmr: number, inputMode: 'voice' | 'chat' }> = [];
 
 const PHASE_DURATIONS: Record<MatchState['phase'], number> = {
   Lobby: 15,
@@ -130,7 +131,8 @@ const transitionPhase = async (matchId: string) => {
         match.mode, 
         match.difficulty, 
         match.leftPlayer?.id, 
-        match.rightPlayer?.id
+        match.rightPlayer?.id,
+        match.inputMode
       );
     }
 
@@ -161,6 +163,8 @@ setInterval(() => {
         const delta = await analyzeDebateImpact(aiResponse, match.phase);
         match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
 
+        await saveMatchMessage(matchId, null, `[AI]: ${aiResponse}`, match.phase, delta);
+
         io.to(matchId).emit('game_update', {
           momentum: match.momentum,
           lastDelta: delta,
@@ -175,6 +179,8 @@ setInterval(() => {
         
         const delta = await analyzeDebateImpact(aiResponse, match.phase);
         match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+
+        await saveMatchMessage(matchId, null, `[AI]: ${aiResponse}`, match.phase, delta);
 
         io.to(matchId).emit('game_update', {
           momentum: match.momentum,
@@ -447,8 +453,19 @@ apiRouter.get('/admin/topics', authenticateToken as any, authorizeAdmin as any, 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('join_match', async (data: { matchId: string, mode?: 'casual' | 'ai' | 'ranked', difficulty?: 'easy' | 'medium' | 'hard' }) => {
-    const { matchId, mode = 'casual', difficulty = 'medium' } = typeof data === 'string' ? { matchId: data } : data;
+  socket.on('join_match', async (data: { 
+    matchId: string, 
+    mode?: 'casual' | 'ai' | 'ranked', 
+    difficulty?: 'easy' | 'medium' | 'hard',
+    inputMode?: 'voice' | 'chat'
+  }) => {
+    const { 
+      matchId, 
+      mode = 'casual', 
+      difficulty = 'medium', 
+      inputMode = 'voice' 
+    } = typeof data === 'string' ? { matchId: data } : data;
+    
     socket.join(matchId);
 
     if (!matches[matchId]) {
@@ -461,7 +478,8 @@ io.on('connection', (socket) => {
         transcripts: [],
         topic: { title: topic.title, description: topic.description },
         mode,
-        difficulty
+        difficulty,
+        inputMode
       };
       
       if (mode === 'ai') {
@@ -469,27 +487,51 @@ io.on('connection', (socket) => {
       }
     }
 
-    console.log(`User ${socket.id} joined ${mode} match ${matchId}`);
+    console.log(`User ${socket.id} joined ${mode} match ${matchId} via ${inputMode}`);
     socket.emit('game_init', matches[matchId]);
   });
 
-  socket.on('join_ranked_queue', async (data: { userId: string, username: string }) => {
-    // In a real app, fetch MMR from DB. Using 1000 as default.
+  socket.on('chat_message', async (data: { matchId: string, text: string }) => {
+    const match = matches[data.matchId];
+    if (!match || match.phase === 'Results' || match.phase === 'Lobby') return;
+
+    // Logic: Only allow chat if inputMode matches OR during Crossfire
+    // In AI mode, we allow it if it's the player's turn phase
+    const isP1Turn = match.phase.includes('P1');
+    const isCrossfire = match.phase === 'Crossfire';
+
+    if (isP1Turn || isCrossfire) {
+      match.transcripts.push(data.text);
+      const delta = await analyzeDebateImpact(data.text, match.phase);
+      match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+
+      await saveMatchMessage(data.matchId, null, data.text, match.phase, delta); // user_id handling can be refined
+
+      io.to(data.matchId).emit('game_update', {
+        momentum: match.momentum,
+        lastDelta: delta,
+        transcript: data.text
+      });
+    }
+  });
+
+  socket.on('join_ranked_queue', async (data: { userId: string, username: string, inputMode: 'voice' | 'chat' }) => {
     const user = await findUserByIdentifier(data.userId);
     const mmr = user?.mmr || 1000;
 
-    // Simple Matchmaking: Find someone within 200 MMR
-    const opponentIndex = rankedQueue.findIndex(p => Math.abs(p.mmr - mmr) < 200);
+    // Match by MMR AND inputMode
+    const opponentIndex = rankedQueue.findIndex(p => 
+      Math.abs(p.mmr - mmr) < 200 && p.inputMode === data.inputMode
+    );
 
     if (opponentIndex > -1) {
       const opponent = rankedQueue.splice(opponentIndex, 1)[0];
       const matchId = `ranked-${Date.now()}`;
       
-      // Notify both
-      io.to(socket.id).emit('match_found', { matchId, opponent: opponent.username });
-      io.to(opponent.socketId).emit('match_found', { matchId, opponent: data.username });
+      io.to(socket.id).emit('match_found', { matchId, opponent: opponent.username, inputMode: data.inputMode });
+      io.to(opponent.socketId).emit('match_found', { matchId, opponent: data.username, inputMode: data.inputMode });
     } else {
-      rankedQueue.push({ socketId: socket.id, userId: data.userId, username: data.username, mmr });
+      rankedQueue.push({ socketId: socket.id, userId: data.userId, username: data.username, mmr, inputMode: data.inputMode });
       socket.emit('queue_joined');
     }
   });
@@ -508,6 +550,8 @@ io.on('connection', (socket) => {
     match.transcripts.push(data.text);
     const delta = await analyzeDebateImpact(data.text, match.phase);
     match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+
+    await saveMatchMessage(data.matchId, null, data.text, match.phase, delta);
 
     io.to(data.matchId).emit('game_update', {
       momentum: match.momentum,

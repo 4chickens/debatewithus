@@ -4,6 +4,12 @@ export interface User {
     id: string;
     username: string;
     role: UserRole;
+    xp: number;
+    level: number;
+    mmr: number;
+    wins: number;
+    losses: number;
+    streak: number;
 }
 
 export interface Topic {
