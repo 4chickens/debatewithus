@@ -168,6 +168,54 @@ export async function findUserByIdentifier(identifier: string) {
     return data;
 }
 
+export async function getAllUsers() {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, username, email, role, is_verified, created_at')
+        .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+}
+
+export async function updateUserRole(userId: string, role: string) {
+    if (!supabase) throw new Error('Database not configured');
+
+    const { data, error } = await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', userId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function getAllTopics(status?: string) {
+    if (!supabase) return [];
+
+    let query = supabase
+        .from('topics')
+        .select(`
+            *,
+            created_by (username),
+            topic_tags (
+                tags (name)
+            )
+        `);
+
+    if (status) {
+        query = query.eq('status', status);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+}
+
 /**
  * --- TOPIC & HASHTAG SERVICES ---
  */

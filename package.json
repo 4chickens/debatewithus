@@ -1,5 +1,6 @@
 {
   "name": "debatewithus",
+  "version": "1.1.0",
   "private": true,
   "workspaces": [
     "web",
@@ -11,5 +12,7 @@
     "dev:server": "npm run dev -w server",
     "build:all": "npm run build --workspaces --if-present",
     "install:all": "npm install"
+  },
+  "dependencies": {
   }
 }

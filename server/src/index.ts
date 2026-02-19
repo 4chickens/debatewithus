@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 import { generateToken } from './services/livekit.js';
 import { analyzeDebateImpact } from './services/openai.js';
 import { setupDeepgramStream } from './services/deepgram.js';
-import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, getPendingTopics, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
+import { saveMatchResult, getRandomTopic, createUser, findUserByIdentifier, getActiveTopics, getPendingTopics, getAllTopics, getAllUsers, updateUserRole, submitTopic, updateTopicStatus, verifyUserCode, deleteUnverifiedUser, uploadImage } from './services/supabase.js';
 import { sendVerificationEmail } from './services/mail.js';
 import { authenticateToken, authorizeAdmin, generateUserToken, AuthRequest } from './middleware/auth.js';
 import bcrypt from 'bcryptjs';
@@ -351,6 +351,39 @@ apiRouter.get('/admin/topics/pending', authenticateToken as any, authorizeAdmin 
   } catch (err: any) {
     console.error('Fetch pending topics failed:', err);
     res.status(500).json({ error: err.message || 'Failed to fetch pending topics' });
+  }
+});
+
+apiRouter.get('/admin/users', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
+  try {
+    const users = await getAllUsers();
+    res.json(users);
+  } catch (err: any) {
+    console.error('Fetch users failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch users' });
+  }
+});
+
+apiRouter.put('/admin/users/:id/role', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    const user = await updateUserRole(id, role);
+    res.json(user);
+  } catch (err: any) {
+    console.error('Update user role failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to update user role' });
+  }
+});
+
+apiRouter.get('/admin/topics', authenticateToken as any, authorizeAdmin as any, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const topics = await getAllTopics(status as string);
+    res.json(topics);
+  } catch (err: any) {
+    console.error('Fetch all topics failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch topics' });
   }
 });
 

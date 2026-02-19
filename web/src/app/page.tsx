@@ -7,22 +7,7 @@ import { Swords, Search, Plus, User, LogOut, Loader2, Sparkles, Users } from 'lu
 import TopicCard from '@/components/TopicCard';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/config';
-
-interface Topic {
-  id: string;
-  title: string;
-  description: string;
-  thumbnail_url?: string;
-  upvotes: number;
-  created_at: string;
-  status: string;
-  created_by?: { username: string };
-  topic_tags?: Array<{
-    tags: {
-      name: string;
-    };
-  }>;
-}
+import { Topic } from '@/types';
 
 export default function Home() {
   const router = useRouter();
@@ -72,7 +57,7 @@ export default function Home() {
             animate={{ opacity: 1, x: 0 }}
             className="text-neon-cyan text-[10px] font-mono tracking-[0.5em] uppercase"
           >
-            v1.1.0-beta // debatewithus
+            v1.1.0 // debatewithus
           </motion.div>
           <h1 className="text-4xl font-black italic tracking-tighter hover:text-neon-cyan transition-colors cursor-pointer" onClick={() => router.push('/')}>
             debatewithus

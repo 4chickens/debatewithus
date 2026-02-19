@@ -3,16 +3,7 @@
 import { motion } from 'framer-motion';
 import { ExternalLink, Users, Tag } from 'lucide-react';
 import Link from 'next/link';
-
-interface Topic {
-    id: string;
-    title: string;
-    description: string;
-    thumbnail_url?: string;
-    upvotes: number;
-    created_by?: { username: string };
-    topic_tags?: { tags: { name: string } }[];
-}
+import { Topic } from '@/types';
 
 export default function TopicCard({ topic }: { topic: Topic }) {
     const tags = topic.topic_tags?.map(tt => tt.tags.name) || [];
