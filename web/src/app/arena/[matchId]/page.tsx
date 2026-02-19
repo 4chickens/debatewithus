@@ -1,20 +1,21 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState, useRef, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/useGameStore';
 import { MomentumMeter } from '@/components/MomentumMeter';
 import { AvatarVisualizer } from '@/components/AvatarVisualizer';
-import { Timer, Zap, Mic, MicOff, Home } from 'lucide-react';
+import { Timer, Zap, Mic, MicOff, Home, Send } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { API_URL } from '@/config';
 
-export default function ArenaPage() {
+function ArenaContent() {
     const { matchId } = useParams();
     const searchParams = useSearchParams();
     const mode = searchParams.get('mode') || 'casual';
     const difficulty = searchParams.get('difficulty') || 'medium';
+    const inputMode = searchParams.get('inputMode') || 'voice';
 
     const { momentum, player1, player2, phase, timeLeft, setMomentum, setTimeLeft, updateVolume, setPhase } = useGameStore();
     const [isMuted, setIsMuted] = useState(false);
@@ -26,7 +27,6 @@ export default function ArenaPage() {
     const [topic, setTopic] = useState({ title: 'LOADING TOPIC...', description: '' });
     const socketRef = useRef<Socket | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
 
     // 1. Initialize Socket Connection
@@ -49,7 +49,6 @@ export default function ArenaPage() {
             if (data.momentum !== undefined) setMomentum(data.momentum);
             
             if (data.transcript) {
-                // If it's AI, show typing simulation
                 if (data.transcript.startsWith('[AI]')) {
                     setIsAiTyping(true);
                     setTimeout(() => {
@@ -57,7 +56,6 @@ export default function ArenaPage() {
                         setIsAiTyping(false);
                     }, 2000);
                 } else {
-                    // For human messages (voice or chat), show immediately
                     setTranscript(data.transcript);
                 }
             }
@@ -83,7 +81,7 @@ export default function ArenaPage() {
         };
     }, [matchId, mode, difficulty, inputMode, setMomentum, setPhase, setTimeLeft]);
 
-    // 2. Real-time Audio Streaming & Analysis (Only if in voice mode)
+    // 2. Real-time Audio Streaming (Only if in voice mode)
     useEffect(() => {
         if (inputMode !== 'voice') return;
 
@@ -153,22 +151,11 @@ export default function ArenaPage() {
         setMessage('');
     };
 
-    // 2. Mock Game Timer
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft((prev) => Math.max(0, prev - 1));
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [setTimeLeft]);
-
-    // 3. Emit momentum changes to server (for demo purposes)
     const handleMomentumChange = (val: number) => {
         setMomentum(val);
-        socketRef.current?.emit('momentum_update', { matchId: 'mock-match-id', momentum: val });
+        socketRef.current?.emit('momentum_update', { matchId: matchId, momentum: val });
     };
 
-    // Handle "Momentum Damage" Shake Effect
     const triggerShake = () => {
         setIsShaking(true);
         setTimeout(() => setIsShaking(false), 500);
@@ -191,7 +178,6 @@ export default function ArenaPage() {
 
     return (
         <main className="min-h-screen bg-black text-white relative flex flex-col items-center justify-between p-8 overflow-hidden">
-            {/* Background Effects */}
             <div className="scanline" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(0,243,255,0.05)_0%,rgba(0,0,0,0)_70%)]" />
 
@@ -213,24 +199,24 @@ export default function ArenaPage() {
                 </div>
 
                 <div className="flex flex-col items-center gap-2">
-                    <div className="flex flex-col items-center gap-2">
-                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-6 py-2 rounded-full backdrop-blur-xl shadow-[0_0_20px_rgba(255,0,127,0.2)]">
-                            <Timer className="text-neon-pink w-4 h-4 animate-pulse" />
-                            <span className="font-mono text-2xl font-bold tracking-tighter">{timeLeft}s</span>
-                        </div>
-                        <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest text-center">
-                            {getPhaseLabel(phase)}
-                        </div>
+                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-6 py-2 rounded-full backdrop-blur-xl shadow-[0_0_20px_rgba(255,0,127,0.2)]">
+                        <Timer className="text-neon-pink w-4 h-4 animate-pulse" />
+                        <span className="font-mono text-2xl font-bold tracking-tighter">{timeLeft}s</span>
+                    </div>
+                    <div className="text-[10px] font-mono text-white/40 uppercase tracking-widest text-center">
+                        {getPhaseLabel(phase)}
                     </div>
                 </div>
 
                 <div className="flex gap-4">
-                    <button
-                        onClick={() => setIsMuted(!isMuted)}
-                        className={`p-3 rounded-full border transition-all ${isMuted ? 'border-neon-pink bg-neon-pink/10 text-neon-pink shadow-[0_0_15px_var(--neon-pink)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                    >
-                        {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
-                    </button>
+                    {inputMode === 'voice' && (
+                        <button
+                            onClick={() => setIsMuted(!isMuted)}
+                            className={`p-3 rounded-full border transition-all ${isMuted ? 'border-neon-pink bg-neon-pink/10 text-neon-pink shadow-[0_0_15px_var(--neon-pink)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                        >
+                            {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+                        </button>
+                    )}
                     <button
                         onClick={() => router.push('/')}
                         className="p-3 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
@@ -240,6 +226,7 @@ export default function ArenaPage() {
                 </div>
             </div>
 
+            {/* Combat Area */}
             <motion.div
                 className="z-20 w-full max-w-6xl flex justify-around items-center gap-8 py-12"
                 animate={isShaking ? { x: [-10, 10, -5, 5, 0] } : {}}
@@ -259,7 +246,6 @@ export default function ArenaPage() {
                 </div>
 
                 <div className="flex-1 flex flex-col items-center gap-12">
-                    {/* Topic Display */}
                     <div className="text-center space-y-2 max-w-sm">
                         <h2 className="text-neon-cyan text-xl font-black tracking-tight">{topic.title}</h2>
                         <p className="text-[10px] text-white/40 uppercase tracking-widest leading-relaxed">
@@ -284,7 +270,6 @@ export default function ArenaPage() {
                     </div>
                     <MomentumMeter />
 
-                    {/* Live Transcript Bubble */}
                     <div className="min-h-[80px] flex flex-col items-center justify-center">
                         <AnimatePresence mode="wait">
                             {isAiTyping ? (
@@ -403,8 +388,19 @@ export default function ArenaPage() {
                 </div>
             </div>
 
-            {/* Bottom Border Line */}
             <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-neon-cyan to-transparent opacity-30 shadow-[0_0_20px_var(--neon-cyan)]" />
         </main>
+    );
+}
+
+export default function ArenaPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-black text-white flex items-center justify-center font-mono text-xs uppercase tracking-[0.5em] animate-pulse">
+                Establishing Neural Link...
+            </div>
+        }>
+            <ArenaContent />
+        </Suspense>
     );
 }
