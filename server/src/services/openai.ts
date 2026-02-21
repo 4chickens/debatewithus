@@ -14,12 +14,15 @@ const openai = new OpenAI({
 
 /**
  * Analyzes a snippet of debate text and returns a momentum delta (-10 to 10).
+ * Positive = Better for Right, Negative = Better for Left.
  */
-export async function analyzeDebateImpact(text: string, phase: string): Promise<number> {
+export async function analyzeDebateImpact(text: string, phase: string, speakerSide: 'left' | 'right' | 'system'): Promise<number> {
     if (!process.env.OPENAI_API_KEY) {
         console.warn('OpenAI API key missing, returning neutral delta.');
         return 0;
     }
+
+    if (speakerSide === 'system') return 0;
 
     try {
         const response = await openai.chat.completions.create({
@@ -27,11 +30,18 @@ export async function analyzeDebateImpact(text: string, phase: string): Promise<
             messages: [
                 {
                     role: "system",
-                    content: `You are an AI judge for a fast-paced debate game. 
-          Given a transcript snippet from the "${phase}" phase, evaluate its impact.
+                    content: `You are an expert AI judge for a fast-paced debate game. 
+          Given a transcript snippet from the "${phase}" phase, spoken by the ${speakerSide.toUpperCase()} player.
+          
+          MOMENTUM SCORING RULES:
+          - The game tracks momentum on a scale where Left = Negative and Right = Positive.
+          - If the ${speakerSide.toUpperCase()} player makes a strong, logical, or persuasive point, you MUST award them points in THEIR direction.
+          - If ${speakerSide.toUpperCase()} is LEFT: a good point should be a NEGATIVE integer (e.g., -5).
+          - If ${speakerSide.toUpperCase()} is RIGHT: a good point should be a POSITIVE integer (e.g., +5).
+          - Neutral or weak points should be close to 0.
+          - Extremely strong points can be up to 10 (or -10).
+          
           Return ONLY a single integer between -10 and 10.
-          Positive = Better for the Right side.
-          Negative = Better for the Left side.
           Consider logic, rhetoric, and aggression.`
                 },
                 { role: "user", content: text }

@@ -1,7 +1,7 @@
-import type { NextConfig } from "next";
-import path from "path";
+// @ts-check
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   output: 'standalone',
   eslint: {
     ignoreDuringBuilds: true,
@@ -11,4 +11,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

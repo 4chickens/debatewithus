@@ -78,8 +78,8 @@ interface MatchState {
   momentum: number;
   phase: 'Lobby' | 'Opening_P1' | 'Opening_P2' | 'Rebuttal_P1' | 'Rebuttal_P2' | 'Crossfire' | 'Closing_P1' | 'Closing_P2' | 'Results';
   timeLeft: number;
-  leftPlayer?: { id: string, name: string };
-  rightPlayer?: { id: string, name: string };
+  leftPlayer?: { id: string, name: string, socketId: string };
+  rightPlayer?: { id: string, name: string, socketId: string };
   transcripts: string[];
   topic: { title: string, description: string };
   mode: 'casual' | 'ai' | 'ranked';
@@ -160,7 +160,7 @@ setInterval(() => {
         const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium', match.phase);
         match.transcripts.push(`[AI]: ${aiResponse}`);
         
-        const delta = await analyzeDebateImpact(aiResponse, match.phase);
+        const delta = await analyzeDebateImpact(aiResponse, match.phase, 'right');
         match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
 
         await saveMatchMessage(matchId, null, `[AI]: ${aiResponse}`, match.phase, delta);
@@ -177,7 +177,7 @@ setInterval(() => {
         const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium', match.phase);
         match.transcripts.push(`[AI]: ${aiResponse}`);
         
-        const delta = await analyzeDebateImpact(aiResponse, match.phase);
+        const delta = await analyzeDebateImpact(aiResponse, match.phase, 'right');
         match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
 
         await saveMatchMessage(matchId, null, `[AI]: ${aiResponse}`, match.phase, delta);
@@ -453,19 +453,23 @@ apiRouter.get('/admin/topics', authenticateToken as any, authorizeAdmin as any, 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('join_match', async (data: { 
-    matchId: string, 
-    mode?: 'casual' | 'ai' | 'ranked', 
+  socket.on('join_match', async (data: {
+    matchId: string,
+    userId?: string,
+    username?: string,
+    mode?: 'casual' | 'ai' | 'ranked',
     difficulty?: 'easy' | 'medium' | 'hard',
     inputMode?: 'voice' | 'chat'
   }) => {
-    const { 
-      matchId, 
-      mode = 'casual', 
-      difficulty = 'medium', 
-      inputMode = 'voice' 
+    const {
+      matchId,
+      userId = socket.id,
+      username = `Guest_${socket.id.slice(0, 4)}`,
+      mode = 'casual',
+      difficulty = 'medium',
+      inputMode = 'voice'
     } = typeof data === 'string' ? { matchId: data } : data;
-    
+
     socket.join(matchId);
 
     if (!matches[matchId]) {
@@ -481,13 +485,22 @@ io.on('connection', (socket) => {
         difficulty,
         inputMode
       };
-      
+
       if (mode === 'ai') {
-        matches[matchId].rightPlayer = { id: 'ai-bot', name: `AI Bot (${difficulty})` };
+        matches[matchId].leftPlayer = { id: userId, name: username, socketId: socket.id };
+        matches[matchId].rightPlayer = { id: 'ai-bot', name: `AI Bot (${difficulty})`, socketId: 'ai' };
+      } else {
+        // First joiner is Left Player
+        matches[matchId].leftPlayer = { id: userId, name: username, socketId: socket.id };
+      }
+    } else {
+      // Second joiner in non-AI mode is Right Player
+      if (matches[matchId].mode !== 'ai' && !matches[matchId].rightPlayer && matches[matchId].leftPlayer?.socketId !== socket.id) {
+        matches[matchId].rightPlayer = { id: userId, name: username, socketId: socket.id };
       }
     }
 
-    console.log(`User ${socket.id} joined ${mode} match ${matchId} via ${inputMode}`);
+    console.log(`User ${socket.id} (${username}) joined ${mode} match ${matchId} as ${matches[matchId].leftPlayer?.socketId === socket.id ? 'Left' : 'Right'}`);
     socket.emit('game_init', matches[matchId]);
   });
 
@@ -495,22 +508,34 @@ io.on('connection', (socket) => {
     const match = matches[data.matchId];
     if (!match || match.phase === 'Results' || match.phase === 'Lobby') return;
 
-    // Logic: Only allow chat if inputMode matches OR during Crossfire
-    // In AI mode, we allow it if it's the player's turn phase
+    // Speaker Verification
+    let speakerSide: 'left' | 'right' | null = null;
+    if (match.leftPlayer?.socketId === socket.id) speakerSide = 'left';
+    else if (match.rightPlayer?.socketId === socket.id) speakerSide = 'right';
+
+    if (!speakerSide) return;
+
     const isP1Turn = match.phase.includes('P1');
+    const isP2Turn = match.phase.includes('P2');
     const isCrossfire = match.phase === 'Crossfire';
 
-    if (isP1Turn || isCrossfire) {
-      match.transcripts.push(data.text);
-      const delta = await analyzeDebateImpact(data.text, match.phase);
+    const canSpeak = (speakerSide === 'left' && (isP1Turn || isCrossfire)) ||
+      (speakerSide === 'right' && (isP2Turn || isCrossfire));
+
+    if (canSpeak) {
+      const speakerPrefix = speakerSide === 'left' ? '[Left]' : '[Right]';
+      const fullText = `${speakerPrefix}: ${data.text}`;
+      match.transcripts.push(fullText);
+
+      const delta = await analyzeDebateImpact(data.text, match.phase, speakerSide);
       match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
 
-      await saveMatchMessage(data.matchId, null, data.text, match.phase, delta); // user_id handling can be refined
+      await saveMatchMessage(data.matchId, match[speakerSide === 'left' ? 'leftPlayer' : 'rightPlayer']?.id || null, fullText, match.phase, delta);
 
       io.to(data.matchId).emit('game_update', {
         momentum: match.momentum,
         lastDelta: delta,
-        transcript: data.text
+        transcript: fullText
       });
     }
   });
@@ -547,17 +572,36 @@ io.on('connection', (socket) => {
     const match = matches[data.matchId];
     if (!match || match.phase === 'Results' || match.phase === 'Lobby') return;
 
-    match.transcripts.push(data.text);
-    const delta = await analyzeDebateImpact(data.text, match.phase);
-    match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+    // Speaker Verification
+    let speakerSide: 'left' | 'right' | null = null;
+    if (match.leftPlayer?.socketId === socket.id) speakerSide = 'left';
+    else if (match.rightPlayer?.socketId === socket.id) speakerSide = 'right';
 
-    await saveMatchMessage(data.matchId, null, data.text, match.phase, delta);
+    if (!speakerSide) return;
 
-    io.to(data.matchId).emit('game_update', {
-      momentum: match.momentum,
-      lastDelta: delta,
-      transcript: data.text
-    });
+    const isP1Turn = match.phase.includes('P1');
+    const isP2Turn = match.phase.includes('P2');
+    const isCrossfire = match.phase === 'Crossfire';
+
+    const canSpeak = (speakerSide === 'left' && (isP1Turn || isCrossfire)) ||
+      (speakerSide === 'right' && (isP2Turn || isCrossfire));
+
+    if (canSpeak) {
+      const speakerPrefix = speakerSide === 'left' ? '[Left]' : '[Right]';
+      const fullText = `${speakerPrefix}: ${data.text}`;
+
+      match.transcripts.push(fullText);
+      const delta = await analyzeDebateImpact(data.text, match.phase, speakerSide);
+      match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
+
+      await saveMatchMessage(data.matchId, match[speakerSide === 'left' ? 'leftPlayer' : 'rightPlayer']?.id || null, fullText, match.phase, delta);
+
+      io.to(data.matchId).emit('game_update', {
+        momentum: match.momentum,
+        lastDelta: delta,
+        transcript: fullText
+      });
+    }
   });
 
   // Crowd Voting
