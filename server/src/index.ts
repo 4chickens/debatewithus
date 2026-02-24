@@ -110,11 +110,11 @@ const transitionPhase = async (matchId: string) => {
   if (!match) return;
 
   const phases: MatchState['phase'][] = [
-    'Lobby', 
-    'Opening_P1', 'Opening_P2', 
-    'Rebuttal_P1', 'Rebuttal_P2', 
-    'Crossfire', 
-    'Closing_P1', 'Closing_P2', 
+    'Lobby',
+    'Opening_P1', 'Opening_P2',
+    'Rebuttal_P1', 'Rebuttal_P2',
+    'Crossfire',
+    'Closing_P1', 'Closing_P2',
     'Results'
   ];
   const currentIndex = phases.indexOf(match.phase);
@@ -125,12 +125,12 @@ const transitionPhase = async (matchId: string) => {
 
     if (match.phase === 'Results') {
       await saveMatchResult(
-        matchId, 
-        match.momentum, 
-        match.transcripts, 
-        match.mode, 
-        match.difficulty, 
-        match.leftPlayer?.id, 
+        matchId,
+        match.momentum,
+        match.transcripts,
+        match.mode,
+        match.difficulty,
+        match.leftPlayer?.id,
         match.rightPlayer?.id,
         match.inputMode
       );
@@ -159,7 +159,7 @@ setInterval(() => {
       if (isAITurn && match.timeLeft === PHASE_DURATIONS[match.phase] - 2) {
         const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium', match.phase);
         match.transcripts.push(`[AI]: ${aiResponse}`);
-        
+
         const delta = await analyzeDebateImpact(aiResponse, match.phase, 'right');
         match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
 
@@ -176,7 +176,7 @@ setInterval(() => {
       if (isCrossfire && match.timeLeft > 0 && match.timeLeft % 15 === 0) {
         const aiResponse = await generateAIResponse(match.topic, match.transcripts, match.difficulty || 'medium', match.phase);
         match.transcripts.push(`[AI]: ${aiResponse}`);
-        
+
         const delta = await analyzeDebateImpact(aiResponse, match.phase, 'right');
         match.momentum = Math.max(0, Math.min(100, match.momentum + delta));
 
@@ -545,14 +545,14 @@ io.on('connection', (socket) => {
     const mmr = user?.mmr || 1000;
 
     // Match by MMR AND inputMode
-    const opponentIndex = rankedQueue.findIndex(p => 
+    const opponentIndex = rankedQueue.findIndex(p =>
       Math.abs(p.mmr - mmr) < 200 && p.inputMode === data.inputMode
     );
 
     if (opponentIndex > -1) {
       const opponent = rankedQueue.splice(opponentIndex, 1)[0];
       const matchId = `ranked-${Date.now()}`;
-      
+
       io.to(socket.id).emit('match_found', { matchId, opponent: opponent.username, inputMode: data.inputMode });
       io.to(opponent.socketId).emit('match_found', { matchId, opponent: data.username, inputMode: data.inputMode });
     } else {
@@ -620,9 +620,15 @@ io.on('connection', (socket) => {
     io.to(data.matchId).emit('voice_activity', { side: 'left', volume: data.volume });
 
     if (!dgConnections[socket.id]) {
-      dgConnections[socket.id] = setupDeepgramStream((transcript) => {
+      const stream = setupDeepgramStream((transcript) => {
         socket.emit('transcript_data', { matchId: data.matchId, text: transcript });
       });
+      if (stream) {
+        dgConnections[socket.id] = stream;
+      } else {
+        // Deepgram not configured — skip voice transcription silently
+        return;
+      }
     }
 
     const dg = dgConnections[socket.id];
