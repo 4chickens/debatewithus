@@ -1,15 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic'; // Import dynamic
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Swords, Search, Plus, User, LogOut, Loader2, Sparkles, Users } from 'lucide-react';
 import TopicCard from '@/components/TopicCard';
-import Profile from '@/components/Profile';
-import Leaderboard from '@/components/Leaderboard';
+// import Profile from '@/components/Profile'; // Removed direct import
+// import Leaderboard from '@/components/Leaderboard'; // Removed direct import
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/config';
 import { Topic } from '@/types';
+
+// Dynamically import Profile and Leaderboard with ssr: false
+const Profile = dynamic(() => import('@/components/Profile'), { ssr: false });
+const Leaderboard = dynamic(() => import('@/components/Leaderboard'), { ssr: false });
 
 export default function Home() {
   const router = useRouter();

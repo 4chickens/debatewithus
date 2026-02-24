@@ -1,14 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic'; // Import dynamic
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Check, X, Shield, Clock, AlertCircle, Loader2, Users, FileText, Grid, LogOut, Home, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/config';
-import UserManagement from '@/components/admin/UserManagement';
-import TopicManagement from '@/components/admin/TopicManagement';
+// import UserManagement from '@/components/admin/UserManagement'; // Removed direct import
+// import TopicManagement from '@/components/admin/TopicManagement'; // Removed direct import
 import { Topic } from '@/types';
+
+// Dynamically import UserManagement and TopicManagement with ssr: false
+const UserManagement = dynamic(() => import('@/components/admin/UserManagement'), { ssr: false });
+const TopicManagement = dynamic(() => import('@/components/admin/TopicManagement'), { ssr: false });
 
 export default function AdminPage() {
     const router = useRouter();

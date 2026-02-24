@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { User, Shield, AlertTriangle, Check, X, Clock } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/config';
@@ -17,7 +17,7 @@ export default function UserManagement() {
     const [users, setUsers] = useState<UserData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         try {
             const res = await fetch(`${API_URL}/api/admin/users`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -31,11 +31,11 @@ export default function UserManagement() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [token]);
 
     useEffect(() => {
         fetchUsers();
-    }, []);
+    }, [fetchUsers]);
 
     const handleRoleUpdate = async (userId: string, newRole: string) => {
         if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
@@ -86,8 +86,8 @@ export default function UserManagement() {
                                 <td className="p-4 text-white/60">{user.email}</td>
                                 <td className="p-4">
                                     <span className={`px-2 py-1 rounded text-[10px] font-mono uppercase ${user.role === 'admin' ? 'bg-neon-purple/20 text-neon-purple border border-neon-purple/50' :
-                                            user.role === 'banned' ? 'bg-red-500/20 text-red-500 border border-red-500/50' :
-                                                'bg-white/10 text-white/60'
+                                        user.role === 'banned' ? 'bg-red-500/20 text-red-500 border border-red-500/50' :
+                                            'bg-white/10 text-white/60'
                                         }`}>
                                         {user.role}
                                     </span>

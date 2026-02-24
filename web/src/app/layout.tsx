@@ -1,17 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google"; // Using Inter as a fallback for now
 import "./globals.css";
 
-export const dynamic = 'force-dynamic';
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-inter", // Use a generic variable name
 });
 
 export const metadata: Metadata = {
@@ -27,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} antialiased`} // Use the generic variable name
       >
         {children}
       </body>

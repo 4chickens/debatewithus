@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/config';
 import { Clock, Archive, CheckCircle } from 'lucide-react';
@@ -19,7 +19,7 @@ export default function TopicManagement() {
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'active' | 'pending' | 'archived'>('all');
 
-    const fetchTopics = async () => {
+    const fetchTopics = useCallback(async () => {
         setIsLoading(true);
         try {
             const endpoint = filter === 'all'
@@ -38,11 +38,11 @@ export default function TopicManagement() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [filter, token]);
 
     useEffect(() => {
         fetchTopics();
-    }, [filter]);
+    }, [fetchTopics]);
 
     return (
         <div className="space-y-6">
@@ -54,8 +54,8 @@ export default function TopicManagement() {
                         key={status}
                         onClick={() => setFilter(status as any)}
                         className={`px-4 py-2 rounded-lg text-xs font-mono uppercase tracking-widest border transition-all ${filter === status
-                                ? 'bg-neon-cyan/20 border-neon-cyan text-neon-cyan shadow-[0_0_10px_rgba(0,243,255,0.2)]'
-                                : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                            ? 'bg-neon-cyan/20 border-neon-cyan text-neon-cyan shadow-[0_0_10px_rgba(0,243,255,0.2)]'
+                            : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
                             }`}
                     >
                         {status}
@@ -72,8 +72,8 @@ export default function TopicManagement() {
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                     <span className={`w-2 h-2 rounded-full ${topic.status === 'active' ? 'bg-neon-green shadow-[0_0_5px_rgba(57,255,20,0.5)]' :
-                                            topic.status === 'pending' ? 'bg-neon-pink shadow-[0_0_5px_rgba(255,0,255,0.5)]' :
-                                                'bg-white/20'
+                                        topic.status === 'pending' ? 'bg-neon-pink shadow-[0_0_5px_rgba(255,0,255,0.5)]' :
+                                            'bg-white/20'
                                         }`} />
                                     <h3 className="text-white font-bold">{topic.title}</h3>
                                     <span className="text-[10px] font-mono text-white/40 uppercase tracking-tight ml-2">by @{topic.created_by?.username}</span>

@@ -24,9 +24,13 @@ export default function Error({
       
       <div className="z-10 text-center space-y-8 max-w-md">
         <div className="flex justify-center">
-            <div className="p-6 rounded-full bg-red-500/10 border border-red-500/20 animate-pulse">
+            <motion.div
+                className="p-6 rounded-full bg-red-500/10 border border-red-500/20"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+            >
                 <ShieldAlert size={48} className="text-red-500" />
-            </div>
+            </motion.div>
         </div>
 
         <div className="space-y-2">
@@ -35,7 +39,7 @@ export default function Error({
             A critical overflow has been detected. Core functions have been suspended to prevent data corruption.
           </p>
           <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-lg text-left overflow-hidden">
-            <code className="text-[10px] text-red-400 font-mono break-all">{error.message || 'UNKNOWN_EXCEPTION'}</code>
+            <code className="text-[10px] text-red-400 font-mono break-all">{String(error.message) || 'UNKNOWN_EXCEPTION'}</code>
           </div>
         </div>
 

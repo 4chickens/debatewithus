@@ -2,10 +2,7 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  output: 'standalone', // Revert to standalone output to support dynamic routes
   typescript: {
     ignoreBuildErrors: true,
   },
